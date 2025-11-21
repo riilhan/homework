@@ -1,31 +1,16 @@
 # 项目介绍
-本项目是 抖音搜索训练营--AI Agent应用搭建 作业
+本项目是 抖音搜索训练营--AI Agent应用搭建 作业（结果搞错了作业截止时间，两天肝完😇）
+# 界面截图
 <img width="2559" height="1337" alt="image" src="https://github.com/user-attachments/assets/74098086-160f-406e-a39a-bb6375271a9c" />
-
+<img width="2559" height="1338" alt="image" src="https://github.com/user-attachments/assets/a3a4b76f-8743-45c7-ad59-ffd8de61183b" />
+<img width="2559" height="1335" alt="image" src="https://github.com/user-attachments/assets/f19f2eeb-669a-4843-a8da-30eb1b3b71d0" />
 ## 相关工具
 - 通过 Modern.js 完成前后端一体应用搭建
 - 通过[火山云](https://www.volcengine.com/)，接入模型（本项目选择 Doubao-Seed-1.6-lite)
 - 利用 tavily 封装搜索工具，给 agent 提供联网能力
 - 利用 mongodb 配合本地缓存持久化对话目录
 ## 项目结构
-├── api/
-│   └── lambda/
-│       └── chat/
-│           └── index.ts      # BFF 层核心逻辑：处理 AI 请求、联网搜索、数据库 CRUD
-├── lib/
-│   └── db.ts                 # MongoDB 数据库连接工具
-├── models/
-│   └── Conversation.ts       # Mongoose 数据模型定义 (Schema)
-├── src/
-│   ├── assets/               # 静态资源 (图标、图片)
-│   ├── components/
-│   │   ├── Sidebar.tsx       # 侧边栏组件：管理会话列表、历史记录、模式切换
-│   │   └── Sidebar.css       # 侧边栏样式
-│   └── routes/
-│       ├── page.tsx          # 前端主页面：聊天窗口、消息流处理、状态管理
-│       └── app.css           # 全局及主页面样式
-├── .env                      # 环境变量配置 (DB URI)
-└── README.md           # 项目说明文档
+<img width="815" height="543" alt="image" src="https://github.com/user-attachments/assets/2b410450-ead3-4a8e-b9e9-209886e712ac" />
 ## 实现功能
 ### 核心功能
 - 流式输出
@@ -53,12 +38,14 @@
 	- 问题：完全没有后端基础，根本不会写后端
 	- 解决方案：该问 ai 就问 ai，先把项目做完再慢慢学
 # 待修 bug
-- 创建新会话的时候创建了两个
+- 创建新会话偶尔会创建了两个（目前只触发过一次）
+- loading 时禁止切换会话列表
 # 未来规划
 - 重命名会话样式优化，现在看不清字
 - 多语言支持 (i18n)：留了位置但没时间写了
 - 深度思考模式：留了位置但选的模型根本没有 thinking 所以没写
 - 用户系统：注册/登录，计划是点击侧边栏上侧头像跳出注册/登录界面
+- 大模型微调/基于langgraph搭建一个智能agent
 # 参考
 ## ai
 - 后端
