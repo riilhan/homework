@@ -1,0 +1,262 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.shell {
+  position: relative;
+  height: 100%;
+  width: 250px;
+  padding: 10px 14px;
+  background: var(--shell-color);
+  transition: all 0.3s ease;
+}
+
+.close {
+  width: 88px;
+}
+
+.shell li {
+  height: 50px;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.image{
+  min-width: 60px;
+  border-radius: 6px;
+}
+
+.icon {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+
+.shell.close .icon {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.text,
+.icon {
+  color: var(--text-color);
+  transition: left 0.3s ease, top 0.3s ease;
+}
+
+.text {
+  font-size: 17px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 1;
+}
+
+.shell.close .text {
+  opacity: 0;
+}
+
+header {
+  position: relative;
+}
+
+.image-text {
+  display: flex;
+  align-items: center;
+}
+
+.logo-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.name {
+  margin-top: 2px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.software {
+  font-size: 16px;
+  margin-top: -2px;
+  display: block;
+}
+
+.image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image img {
+  width: 45px;
+  border-radius: 6px;
+}
+
+.toggle {
+  position: absolute;
+  top: 50%;
+  right: -25px;
+  transform: translateY(-50%) rotate(180deg);
+  height: 25px;
+  width: 25px;
+  background-color: var(--primary-color);
+  color: var(--shell-color);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  user-select: none;
+}
+
+.shell.close .toggle {
+  transform: translateY(-50%) rotate(0deg);
+}
+
+.menu {
+  margin-top: 40px;
+}
+
+.shell li a {
+  list-style: none;
+  height: 100%;
+  background-color: transparent;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  width: 100%;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.shell li a:hover {
+  background-color: var(--primary-color);
+}
+
+.shell li a:hover .icon,
+.shell li a:hover .text {
+  color: var(--shell-color);
+}
+
+.menu-bar {
+  height: calc(100% - 55px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow-y: scroll;
+}
+
+.menu-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.menu-bar .mode {
+  border-radius: 6px;
+  background-color: var(--primary-color-light);
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.menu-bar .mode .sun-moon {
+  height: 50px;
+  width: 50px;
+  position: relative;
+}
+
+.mode .sun-moon i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  transition: none;
+}
+
+.mode .sun-moon i.sun {
+  opacity: 0;
+}
+
+.toggle-switch {
+  position: absolute;
+  right: 0;
+  height: 100%;
+  min-width: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.switch {
+  position: relative;
+  height: 22px;
+  width: 40px;
+  border-radius: 25px;
+  background-color: var(--toggle-color);
+  transition: all 0.3s ease;
+}
+
+.switch::before {
+  content: '';
+  position: absolute;
+  height: 15px;
+  width: 15px;
+  border-radius: 50%;
+  top: 50%;
+  left: 5px;
+  transform: translateY(-50%);
+  background-color: var(--shell-color);
+  transition: all 0.3s ease;
+}
+
+.dark .shell li a:hover .icon,
+.dark .shell li a:hover .text {
+  color: #ccc;
+}
+
+.dark .mode .sun-moon i.sun {
+  opacity: 1;
+}
+
+.dark .mode .sun-moon i.moon {
+  opacity: 0;
+}
+
+.dark .switch::before {
+  left: 20px;
+}
+
+.toggle-arrow {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.3s ease;
+}
+
+/* 好不容易这个图标终于居中了…… 试了flex试了margin: auto都不能居中 */
+.shell.close a {
+  position: relative;
+  display: flex;
+}
+
+.shell.close a img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  transition: left 0.3s ease, top 0.3s ease;
+}
