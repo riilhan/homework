@@ -1,5 +1,7 @@
 # 项目介绍
 本项目是 抖音搜索训练营--AI Agent应用搭建 作业
+<img width="2559" height="1337" alt="image" src="https://github.com/user-attachments/assets/74098086-160f-406e-a39a-bb6375271a9c" />
+
 ## 相关工具
 - 通过 Modern.js 完成前后端一体应用搭建
 - 通过[火山云](https://www.volcengine.com/)，接入模型（本项目选择 Doubao-Seed-1.6-lite)
