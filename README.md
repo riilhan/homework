@@ -1,24 +1,64 @@
-问题：text-area 设置了 padding，但过长的字数依然会遮住下面按钮
-滚动条显示在message-container旁边而不是整个窗口边(解决：隐藏滚动条)
-
-
-未来规划：亮暗主题切换、中英文切换、登录、更换 ai agent api 实现深度思考
-
-todo：
-用户发送消息后，消息显示
-ai消息流式输出，markdown支持，样式优化
-等待ai消息动画
-
-使用ai的地方：后端、markdown css
-
-
-
-
-
-使用ai：Doubao-Seed-1.6-lite（无深度思考接口）
-ai示例回复：
-builder-runtime.js:33 [rsbuild] WebSocket connecting...
-builder-runtime.js:33 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
-hmr.js:87 [rsbuild] WebSocket connected.
-page.tsx:28 AI回复: Objectcode: 200data: reply: "### **目标设定**  \n#### 短期目标（1个月）  \n- 掌握基础线条（直线/曲线）和常见几何体（正方体、球体、圆柱体等）绘制，**每天练习30分钟**（10分钟线条+20分钟几何体）；  \n- 能独立完成5种几何体+3种日常小物件（杯子、苹果、笔记本）的素描，每周完成1次**2个几何体组合画**。  \n\n#### 中期目标（3个月）  \n- 掌握明暗关系（受光/背光/反光），能画简单场景（书桌一角、窗台）；  \n- 完成10幅完整小场景画，每周复盘1次（对比上周作品找进步，修正3个基础错误：透视不准、明暗模糊等）。  \n\n#### 长期目标（6个月）  \n- 尝试基础色彩（马克笔/彩铅），能画带简单人物的小场景（公园长椅、早餐桌）；  \n- 完成22幅主题画（如“我的日常”“喜欢的角落”），每月参加1次线上绘画交流（分享作品+看他人练习）。\n\n\n### **简单可行的建议**  \n1. **工具不用贵**：先买「2B铅笔+1块橡皮+A4素描本」（几十元足够1个月练习），不用买专业画材；  \n2. **碎片化练习**：每天睡前/通勤时，用手机看「几何体素描步骤图」，跟着画10分钟线条，不用贪多；  \n3. **不照搬只对比**：画完和参考图对比「哪里比例不对」（比如球体是不是太扁），改2次就行，不用纠结“丑”；  \n4. **每周留1张“进步图”**：把每周画得最顺的1张存下来，3个月后看明显变化，超有动力！\n\n\n刚开始不用怕“画不好”，**能坚持小练习比“画复杂画”重要**～ 今天就可以先画1个正方体试试呀 ✍"[[Prototype]]: Objectconstructor: ƒ Object()hasOwnProperty: ƒ hasOwnProperty()isPrototypeOf: ƒ isPrototypeOf()propertyIsEnumerable: ƒ propertyIsEnumerable()toLocaleString: ƒ toLocaleString()toString: ƒ toString()valueOf: ƒ valueOf()__defineGetter__: ƒ __defineGetter__()__defineSetter__: ƒ __defineSetter__()__lookupGetter__: ƒ __lookupGetter__()__lookupSetter__: ƒ __lookupSetter__()__proto__: (...)get __proto__: ƒ __proto__()set __proto__: ƒ __proto__()[[Prototype]]: Objectconstructor: ƒ Object()hasOwnProperty: ƒ hasOwnProperty()isPrototypeOf: ƒ isPrototypeOf()propertyIsEnumerable: ƒ propertyIsEnumerable()toLocaleString: ƒ toLocaleString()toString: ƒ toString()valueOf: ƒ valueOf()__defineGetter__: ƒ __defineGetter__()__defineSetter__: ƒ __defineSetter__()__lookupGetter__: ƒ __lookupGetter__()__lookupSetter__: ƒ __lookupSetter__()__proto__: (...)get __proto__: ƒ __proto__()set __proto__: ƒ __proto__()
-
+# 项目介绍
+本项目是 抖音搜索训练营--AI Agent应用搭建 作业
+## 相关工具
+- 通过 Modern.js 完成前后端一体应用搭建
+- 通过[火山云](https://www.volcengine.com/)，接入模型（本项目选择 Doubao-Seed-1.6-lite)
+- 利用 tavily 封装搜索工具，给 agent 提供联网能力
+- 利用 mongodb 配合本地缓存持久化对话目录
+## 项目结构
+├── api/
+│   └── lambda/
+│       └── chat/
+│           └── index.ts      # BFF 层核心逻辑：处理 AI 请求、联网搜索、数据库 CRUD
+├── lib/
+│   └── db.ts                 # MongoDB 数据库连接工具
+├── models/
+│   └── Conversation.ts       # Mongoose 数据模型定义 (Schema)
+├── src/
+│   ├── assets/               # 静态资源 (图标、图片)
+│   ├── components/
+│   │   ├── Sidebar.tsx       # 侧边栏组件：管理会话列表、历史记录、模式切换
+│   │   └── Sidebar.css       # 侧边栏样式
+│   └── routes/
+│       ├── page.tsx          # 前端主页面：聊天窗口、消息流处理、状态管理
+│       └── app.css           # 全局及主页面样式
+├── .env                      # 环境变量配置 (DB URI)
+└── README.md           # 项目说明文档
+## 实现功能
+### 核心功能
+- 流式输出
+- 联网搜索
+- 会话持久化 & 多会话管理
+### UI
+- 深色/浅色主题
+- 响应式侧边栏
+- Markdown 渲染
+- 交互反馈：加载动画、错误提示气泡、操作确认
+# 遇到的难点及解决方案
+1. 输入框样式遮挡
+	- 问题：当字数过多时，用户输入的内容会遮住输入框底部的操作按钮
+	- 解决方案：尝试调整 padding，未能成功解决
+2. 滚动条美化
+	- 问题：滚动条出现在 message-container 容器边缘，而非 window 边缘
+	- 解决方案：使用 CSS ::-webkit-scrollbar { display: none; } 隐藏滚动条
+3. 图标居中
+    - 问题：创建会话、切换语言图标在侧边栏收缩时难以居中
+    - 解决方案：通过绝对定位解决了，但不知道为什么 flex 就没法居中
+4. markdown 表格渲染
+	- 问题：表格没有渲染
+	- 解决方案：暂无
+5. 后端
+	- 问题：完全没有后端基础，根本不会写后端
+	- 解决方案：该问 ai 就问 ai，先把项目做完再慢慢学
+# 未来规划
+- 重命名会话样式优化，现在看不清字
+- 多语言支持 (i18n)：留了位置但没时间写了
+- 深度思考模式：留了位置但选的模型根本没有 thinking 所以没写
+- 用户系统：注册/登录，计划是点击侧边栏上侧头像跳出注册/登录界面
+# 参考
+## ai
+- 后端
+- markdown 样式
+- 侧边栏的删除、重命名会话样式
+# b站：山羊の前端小窝
+- 侧边栏参考：BV1JM411Z78n

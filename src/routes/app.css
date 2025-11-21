@@ -120,7 +120,7 @@ body {
 
 .assistant-message {
     align-self: flex-start;
-    background: #f8f9fa;
+    background: #ffffff;
     color: #333;
     border: 1px solid var(--border-color);
     border-bottom-left-radius: 4px;
@@ -290,7 +290,6 @@ body {
     100% { transform: rotate(360deg); }
 }
 
-/* Typing Animation */
 .typing-animation {
     display: flex;
     align-items: center;
@@ -318,7 +317,6 @@ body {
     40% { transform: scale(1); opacity: 1; }
 }
 
-/* Streaming Cursor */
 .streaming-cursor {
     display: inline-block;
     width: 2px;
