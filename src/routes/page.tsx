@@ -314,6 +314,7 @@ const Index = () => {
                     type="button"
                     className={`deepthink-button ${isSearchEnabled ? 'active' : ''}`}
                     onClick={() => setIsSearchEnabled(!isSearchEnabled)}
+                    disabled={loading}
                   >联网搜索</button>
               </div>
               <button type="button" className='send-button' onClick={sendToLLM} disabled={loading}></button>

@@ -112,27 +112,27 @@ export const post = async ({ data }: { data: any }) => {
 
     // B. 获取详情
     if (data.action === 'getConversation') {
-        console.log(`[Backend] Action: getConversation, ID: ${data.chatId}`);
+        console.log(`Action: getConversation, ID: ${data.chatId}`);
         const conv = await Conversation.findById(data.chatId);
         return { code: 200, data: conv };
     }
 
     // C. 保存 AI 消息
     if (data.action === 'saveAiMessage') {
-        console.log(`[Backend] Action: saveAiMessage, ID: ${data.chatId}`);
+        console.log(`Action: saveAiMessage, ID: ${data.chatId}`);
         try {
             await Conversation.findByIdAndUpdate(data.chatId, {
                 $push: { messages: { role: 'assistant', content: data.content, timestamp: Date.now() } }
             });
-            console.log('[Backend] AI消息保存成功');
+            console.log('AI消息保存成功');
             return { code: 200, msg: 'Saved' };
         } catch (e) {
-            console.error('[Backend] 保存AI消息失败:', e);
+            console.error('保存AI消息失败:', e);
             return { code: 500, error: 'Save failed' };
         }
     }
 
-        // === 新增: 删除会话 ===
+        // 删除会话
     if (data.action === 'deleteSession') {
         try {
             await Conversation.findByIdAndDelete(data.chatId);
@@ -142,7 +142,7 @@ export const post = async ({ data }: { data: any }) => {
         }
     }
 
-    // === 新增: 重命名会话 ===
+    // 重命名会话
     if (data.action === 'renameSession') {
         try {
             await Conversation.findByIdAndUpdate(data.chatId, { title: data.title });
@@ -183,7 +183,7 @@ export const post = async ({ data }: { data: any }) => {
             console.log(`新会话创建成功 ID: ${currentConversation._id}`);
         }
 
-        // --- 联网搜索 ---
+        // 联网搜索
         if (useSearch) {
             const searchResults = await searchWeb(message);
             if (searchResults) {
@@ -191,7 +191,7 @@ export const post = async ({ data }: { data: any }) => {
             }
         }
 
-        // --- 调用 LLM ---
+        // 调用 LLM
         console.log('正在请求豆包 API...');
         const response = await fetch(DOUBAO_API_URL, {
             method: 'POST',
@@ -217,7 +217,7 @@ export const post = async ({ data }: { data: any }) => {
 
         console.log('豆包API请求成功，准备流式返回');
 
-        // --- 返回流 ---
+        // 返回流
         return new Response(
             new ReadableStream({
                 async start(controller) {
