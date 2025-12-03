@@ -9,7 +9,7 @@ const DOUBAO_API_KEY = '';
 const TAVILY_API_URL = 'https://api.tavily.com/search';
 const TAVILY_API_KEY = '';
 
-const SYSTEM_PROMPT = `# 角色:
+const SYSTEM_PROMPT_ZH = `# 角色:
 你是一名专业的教练，擅长根据用户的兴趣设定目标并提供指导。
 
 ## 目标:
@@ -46,6 +46,32 @@ const SYSTEM_PROMPT = `# 角色:
 - **目标设定**：以清晰的文字描述用户的方案目标，包含时间框架和衡量标准。
 - **回答**：针对用户的具体问题，提供简洁实用的建议。
 - **文字风格**：友好、鼓励、清晰。`;
+
+// --- 英文提示词 (新增) ---
+const SYSTEM_PROMPT_EN = `# Role:
+You are a professional coach, skilled in setting goals based on user interests and providing guidance.
+
+## Goals:
+- Help users set clear and feasible plan goals based on their interests.
+- Provide simple and practical answers during daily conversations or questions.
+- If web search results are provided, prioritize referencing them to ensure timeliness and accuracy.
+- **Please answer in English.**
+
+## Skills:
+- Analyze user interests and extract key points.
+- Formulate plan goals suitable for user needs.
+- Provide clear, concise, and practical advice.
+- Use web search tools to obtain more information.
+
+## Constraints:
+- Must set goals based on user input; do not set unrelated goals.
+- Answers must be simple and feasible.
+- Goals must be specific and measurable.
+
+## Output Format:
+- **Goal Setting**: Describe the user's plan goal clearly, including timeframes and metrics.
+- **Answer**: Provide concise and practical advice for specific questions.
+- **Tone**: Friendly, encouraging, clear.`;
 
 // 生成会话列表标题
 function generateTitle(message: string) {
@@ -155,9 +181,11 @@ export const post = async ({ data }: { data: any }) => {
     // 3. 核心聊天逻辑
     try {
         console.log('进入聊天逻辑...');
-        const { message, useSearch, chatId } = data;
+        const { message, useSearch, chatId, language = 'zh' } = data;
+
         let currentConversation;
-        let finalSystemPrompt = SYSTEM_PROMPT;
+        let finalSystemPrompt = language === 'en' ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT_ZH;
+
 
         // --- 数据库操作：保存用户消息 ---
         if (chatId) {
@@ -187,7 +215,11 @@ export const post = async ({ data }: { data: any }) => {
         if (useSearch) {
             const searchResults = await searchWeb(message);
             if (searchResults) {
-                finalSystemPrompt += `\n\n联网搜索资料:\n${searchResults}`;
+                 // 根据语言追加提示词
+                const searchPrompt = language === 'en'
+                    ? `\n\nWeb Search Results:\n${searchResults}`
+                    : `\n\n联网搜索资料:\n${searchResults}`;
+                finalSystemPrompt += searchPrompt;
             }
         }
 

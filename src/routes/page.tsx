@@ -16,6 +16,46 @@ interface ChatSession {
   updatedAt: string;
 }
 
+// --- 国际化资源 ---
+const locales = {
+  zh: {
+    greet: "你好，欢迎使用任务助手",
+    placeholder: "请输入消息...",
+    deepThink: "深度思考",
+    webSearch: "联网搜索",
+    searching: "正在联网搜索...",
+    error: "出错了",
+    deleteFail: "删除失败，请稍后重试",
+    renameFail: "重命名失败",
+    networkError: "网络请求异常，请检查连接或重试。",
+    aiNoResponse: "AI 未返回任何内容",
+    serverError: "服务器响应错误",
+    loadListFailed: "加载会话列表失败",
+    loadDetailFailed: "加载会话详情失败",
+    emptyResponseBody: "响应体为空",
+    saveMessageFailed: "后台保存消息失败",
+    requestProcessError: "请求流程出错"
+  },
+  en: {
+    greet: "Hello, welcome to AI Task Assistant",
+    placeholder: "Type a message...",
+    deepThink: "Deep Think",
+    webSearch: "Web Search",
+    searching: "Searching the web...",
+    error: "Error",
+    deleteFail: "Delete failed, please try again",
+    renameFail: "Rename failed",
+    networkError: "Network error, please check connection.",
+    aiNoResponse: "AI did not return any content",
+    serverError: "Server response error",
+    loadListFailed: "Failed to load session list",
+    loadDetailFailed: "Failed to load session details",
+    emptyResponseBody: "Response body is empty",
+    saveMessageFailed: "Failed to save message in background",
+    requestProcessError: "Request process error"
+  }
+};
+
 const Index = () => {
   const [hasMessage, setHasMessage] = useState(false);
   const [inputText, setInputText] = useState("");
@@ -23,10 +63,10 @@ const Index = () => {
   const [waitingForAI, setWaitingForAI] = useState(false);
   const [isSearchEnabled, setIsSearchEnabled] = useState(false);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
-
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatList, setChatList] = useState<ChatSession[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [language, setLanguage] = useState<'zh' | 'en'>('zh');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -37,6 +77,15 @@ const Index = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages, waitingForAI]);
+
+  // 获取当前语言的字典
+  const t = locales[language];
+
+  // 切换语言的处理函数
+  const handleLanguageChange = (lang: string) => {
+    const newLang = lang === 'English' || lang === 'en' ? 'en' : 'zh';
+    setLanguage(newLang);
+  };
 
   // 获取列表
   const fetchChatList = async () => {
@@ -49,11 +98,11 @@ const Index = () => {
       const data = await res.json();
       if (data.code === 200) setChatList(data.data);
     } catch (e) {
-      console.error("加载列表失败", e);
+      console.error(t.loadListFailed, e); // 国际化日志
     }
   };
 
-  useEffect(() => { fetchChatList(); }, []);
+  useEffect(() => { fetchChatList(); }, [language]); // 语言变化时也可以刷新一下，虽然通常不需要
 
   // 删除会话
   const handleDeleteSession = async (chatId: string) => {
@@ -64,12 +113,11 @@ const Index = () => {
               body: JSON.stringify({ action: 'deleteSession', chatId })
           });
           if (res.ok) {
-              // 如果删除的是当前会话，重置界面
               if (chatId === activeChatId) handleNewSession();
-              fetchChatList(); // 刷新列表
+              fetchChatList();
           }
       } catch (e) {
-          alert('删除失败，请稍后重试');
+          alert(t.deleteFail);
       }
   };
 
@@ -83,10 +131,11 @@ const Index = () => {
           });
           if (res.ok) fetchChatList();
       } catch (e) {
-          console.error('重命名失败');
+          console.error(t.renameFail);
       }
   };
 
+  // 加载会话详情
   const loadChatSession = async (chatId: string) => {
     if (chatId === activeChatId) return;
     setLoading(true);
@@ -111,7 +160,7 @@ const Index = () => {
         setStreamingMessageId(null);
       }
     } catch (e) {
-      console.error("加载详情失败", e);
+      console.error(t.loadDetailFailed, e); // 国际化日志
     } finally {
       setLoading(false);
     }
@@ -133,7 +182,7 @@ const Index = () => {
           ...prev,
           {
               id: `error-${Date.now()}`,
-              content: `⚠️ **出错了**: ${text}`,
+              content: `⚠️ **${t.error}**: ${text}`,
               role: 'assistant',
               timestamp: Date.now(),
           }
@@ -156,10 +205,11 @@ const Index = () => {
     const messageToSend = inputText;
     const useSearch = isSearchEnabled;
     const currentChatId = activeChatId;
+    const currentLang = language;
 
     setInputText('');
     setLoading(true);
-    setWaitingForAI(true); // 开启等待动画
+    setWaitingForAI(true);
     setStreamingMessageId(null);
 
     try {
@@ -169,13 +219,14 @@ const Index = () => {
         body: JSON.stringify({
           message: messageToSend,
           useSearch: useSearch,
-          chatId: currentChatId
+          chatId: currentChatId,
+          language: currentLang
         }),
       });
 
       if (!response.ok) {
           const errorText = await response.text().catch(() => '');
-          throw new Error(`服务器响应错误 (${response.status}): ${errorText}`);
+          throw new Error(`${t.serverError} (${response.status}): ${errorText}`);
       }
 
       const newChatId = response.headers.get('x-chat-id');
@@ -184,7 +235,8 @@ const Index = () => {
         setTimeout(() => fetchChatList(), 500);
       }
 
-      if (!response.body) throw new Error('响应体为空');
+      // 国际化错误信息
+      if (!response.body) throw new Error(t.emptyResponseBody);
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
@@ -216,7 +268,7 @@ const Index = () => {
                   };
                   tempStreamingId = aiMessage.id;
                   setStreamingMessageId(tempStreamingId);
-                  setWaitingForAI(false); // 收到第一个字，关闭等待动画
+                  setWaitingForAI(false);
                   setMessages(prev => [...prev, aiMessage]);
                 } else {
                   setMessages(prev => prev.map(msg => msg.id === tempStreamingId ? { ...msg, content: fullContent } : msg));
@@ -227,9 +279,8 @@ const Index = () => {
         }
       }
 
-      // 错误处理：如果流结束了还是没有任何内容
       if (!fullContent && !tempStreamingId) {
-        throw new Error("AI 未返回任何内容");
+        throw new Error(t.aiNoResponse);
       }
 
       const finalChatId = newChatId || activeChatId;
@@ -238,13 +289,12 @@ const Index = () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'saveAiMessage', chatId: finalChatId, content: fullContent })
-        }).catch(e => console.warn("后台保存消息失败", e)); // 保存失败不弹窗，静默处理
+        }).catch(e => console.warn(t.saveMessageFailed, e)); // 国际化警告日志
       }
 
     } catch (error: any) {
-      console.error('请求流程出错:', error);
-      // 立即在界面显示错误
-      appendErrorMessage(error.message || "网络请求异常，请检查连接或重试。");
+      console.error(t.requestProcessError, error); // 国际化错误日志
+      appendErrorMessage(error.message || t.networkError);
     } finally {
       setLoading(false);
       setWaitingForAI(false);
@@ -257,12 +307,13 @@ const Index = () => {
       <div className='sidebar-container'>
         <Sidebar
           onNewSession={handleNewSession}
-          onLanguageChange={() => {}}
+          onLanguageChange={handleLanguageChange}
           chatList={chatList}
           activeChatId={activeChatId}
           onSelectChat={loadChatSession}
-          onDeleteSession={handleDeleteSession} // 传递删除
-          onRenameSession={handleRenameSession} // 传递重命名
+          onDeleteSession={handleDeleteSession}
+          onRenameSession={handleRenameSession}
+          currentLanguage={language}
         />
       </div>
 
@@ -288,7 +339,7 @@ const Index = () => {
                 <div className="message assistant-message">
                   <div className="message-content">
                     <div className="typing-animation"><span></span><span></span><span></span></div>
-                    {isSearchEnabled && <div style={{fontSize: '12px', color: '#999', marginTop: '5px'}}>正在联网搜索...</div>}
+                    {isSearchEnabled && <div style={{fontSize: '12px', color: '#999', marginTop: '5px'}}>{t.searching}</div>}
                   </div>
                 </div>
               )}
@@ -296,12 +347,12 @@ const Index = () => {
             </div>
           )}
 
-          {!hasMessage && <p className='greet-text'>你好，欢迎使用任务助手</p>}
+          {!hasMessage && <p className='greet-text'>{t.greet}</p>}
 
           <div className='input-container'>
             <textarea
               className='text-section'
-              placeholder="请输入消息..."
+              placeholder={t.placeholder}
               value={inputText}
               disabled={loading}
               onChange={(e) => setInputText(e.target.value)}
@@ -309,13 +360,13 @@ const Index = () => {
             />
             <div className='button-items'>
               <div className="feature-buttons">
-                  <button type="button" className='deepthink-button'>深度思考</button>
+                  <button type="button" className='deepthink-button'>{t.deepThink}</button>
                   <button
                     type="button"
                     className={`deepthink-button ${isSearchEnabled ? 'active' : ''}`}
                     onClick={() => setIsSearchEnabled(!isSearchEnabled)}
                     disabled={loading}
-                  >联网搜索</button>
+                  >{t.webSearch}</button>
               </div>
               <button type="button" className='send-button' onClick={sendToLLM} disabled={loading}></button>
             </div>
