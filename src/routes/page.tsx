@@ -6,6 +6,7 @@ import Sidebar from '../components/Sidebar';
 interface Message {
   id: string;
   content: string;
+  reasoning?: string;
   role: 'user' | 'assistant';
   timestamp: number;
 }
@@ -24,6 +25,7 @@ const locales = {
     deepThink: "深度思考",
     webSearch: "联网搜索",
     searching: "正在联网搜索...",
+    thinking: "正在深度思考...",
     error: "出错了",
     deleteFail: "删除失败，请稍后重试",
     renameFail: "重命名失败",
@@ -42,6 +44,7 @@ const locales = {
     deepThink: "Deep Think",
     webSearch: "Web Search",
     searching: "Searching the web...",
+    thinking: "Thinking deeply...",
     error: "Error",
     deleteFail: "Delete failed, please try again",
     renameFail: "Rename failed",
@@ -61,7 +64,11 @@ const Index = () => {
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(false);
   const [waitingForAI, setWaitingForAI] = useState(false);
+
+  // 功能开关状态
   const [isSearchEnabled, setIsSearchEnabled] = useState(false);
+  const [isThinkingEnabled, setIsThinkingEnabled] = useState(false);
+
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatList, setChatList] = useState<ChatSession[]>([]);
@@ -98,11 +105,11 @@ const Index = () => {
       const data = await res.json();
       if (data.code === 200) setChatList(data.data);
     } catch (e) {
-      console.error(t.loadListFailed, e); // 国际化日志
+      console.error(t.loadListFailed, e);
     }
   };
 
-  useEffect(() => { fetchChatList(); }, [language]); // 语言变化时也可以刷新一下，虽然通常不需要
+  useEffect(() => { fetchChatList(); }, [language]);
 
   // 删除会话
   const handleDeleteSession = async (chatId: string) => {
@@ -150,6 +157,7 @@ const Index = () => {
         const historyMessages: Message[] = data.data.messages.map((msg: any) => ({
           id: msg._id || `msg-${msg.timestamp}`,
           content: msg.content,
+          reasoning: msg.reasoning, // 如果数据库未来支持存思考过程，这里可以加载
           role: msg.role,
           timestamp: msg.timestamp
         }));
@@ -160,7 +168,7 @@ const Index = () => {
         setStreamingMessageId(null);
       }
     } catch (e) {
-      console.error(t.loadDetailFailed, e); // 国际化日志
+      console.error(t.loadDetailFailed, e);
     } finally {
       setLoading(false);
     }
@@ -173,6 +181,7 @@ const Index = () => {
     setWaitingForAI(false);
     setStreamingMessageId(null);
     setIsSearchEnabled(false);
+    setIsThinkingEnabled(false);
     setActiveChatId(null);
   };
 
@@ -204,6 +213,7 @@ const Index = () => {
 
     const messageToSend = inputText;
     const useSearch = isSearchEnabled;
+    const useThinking = isThinkingEnabled;
     const currentChatId = activeChatId;
     const currentLang = language;
 
@@ -219,6 +229,7 @@ const Index = () => {
         body: JSON.stringify({
           message: messageToSend,
           useSearch: useSearch,
+          enableThinking: useThinking,
           chatId: currentChatId,
           language: currentLang
         }),
@@ -235,12 +246,13 @@ const Index = () => {
         setTimeout(() => fetchChatList(), 500);
       }
 
-      // 国际化错误信息
       if (!response.body) throw new Error(t.emptyResponseBody);
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
+
       let fullContent = '';
+      let fullReasoning = '';
       let tempStreamingId = '';
 
       while (true) {
@@ -256,13 +268,20 @@ const Index = () => {
             if (data === '[DONE]') break;
             try {
               const parsed = JSON.parse(data);
-              const content = parsed.choices[0]?.delta?.content || '';
-              if (content) {
-                fullContent += content;
+              const delta = parsed.choices[0]?.delta;
+
+              const contentChunk = delta?.content || '';
+              const reasoningChunk = delta?.reasoning_content || '';
+
+              if (contentChunk || reasoningChunk) {
+                fullContent += contentChunk;
+                fullReasoning += reasoningChunk;
+
                 if (!tempStreamingId) {
                   const aiMessage: Message = {
                     id: `streaming-${Date.now()}`,
                     content: fullContent,
+                    reasoning: fullReasoning,
                     role: 'assistant',
                     timestamp: Date.now()
                   };
@@ -271,7 +290,11 @@ const Index = () => {
                   setWaitingForAI(false);
                   setMessages(prev => [...prev, aiMessage]);
                 } else {
-                  setMessages(prev => prev.map(msg => msg.id === tempStreamingId ? { ...msg, content: fullContent } : msg));
+                  setMessages(prev => prev.map(msg =>
+                    msg.id === tempStreamingId
+                        ? { ...msg, content: fullContent, reasoning: fullReasoning }
+                        : msg
+                  ));
                 }
               }
             } catch (e) { /* 忽略解析错误 */ }
@@ -285,15 +308,16 @@ const Index = () => {
 
       const finalChatId = newChatId || activeChatId;
       if (finalChatId && fullContent) {
+        // 目前仅保存最终回复内容，若需保存思考过程需修改数据库Schema
         fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'saveAiMessage', chatId: finalChatId, content: fullContent })
-        }).catch(e => console.warn(t.saveMessageFailed, e)); // 国际化警告日志
+        }).catch(e => console.warn(t.saveMessageFailed, e));
       }
 
     } catch (error: any) {
-      console.error(t.requestProcessError, error); // 国际化错误日志
+      console.error(t.requestProcessError, error);
       appendErrorMessage(error.message || t.networkError);
     } finally {
       setLoading(false);
@@ -326,7 +350,23 @@ const Index = () => {
                   <div className="message-content">
                     {message.role === 'assistant' ? (
                         <div>
-                          <ReactMarkdown>{message.content}</ReactMarkdown>
+                          {/* 如果有思考过程，渲染思考区块 */}
+                          {message.reasoning && (
+                            <div className="reasoning-block">
+                                <div className="reasoning-header">
+                                    <span className="reasoning-icon">💭</span>
+                                    {t.deepThink}...
+                                </div>
+                                <div className="reasoning-content">
+                                    <ReactMarkdown>{message.reasoning}</ReactMarkdown>
+                                </div>
+                            </div>
+                          )}
+
+                          {/* 渲染正文回复 */}
+                          <div className="main-response">
+                            <ReactMarkdown>{message.content}</ReactMarkdown>
+                          </div>
                         </div>
                     ) : (
                       message.content.split('\n').map((line, index) => <p key={`${message.id}-${index}`}>{line}</p>)
@@ -339,7 +379,10 @@ const Index = () => {
                 <div className="message assistant-message">
                   <div className="message-content">
                     <div className="typing-animation"><span></span><span></span><span></span></div>
-                    {isSearchEnabled && <div style={{fontSize: '12px', color: '#999', marginTop: '5px'}}>{t.searching}</div>}
+                    {/* 根据状态显示不同的提示语 */}
+                    <div style={{fontSize: '12px', color: '#999', marginTop: '5px'}}>
+                        {isThinkingEnabled ? t.thinking : (isSearchEnabled ? t.searching : "")}
+                    </div>
                   </div>
                 </div>
               )}
@@ -360,13 +403,26 @@ const Index = () => {
             />
             <div className='button-items'>
               <div className="feature-buttons">
-                  <button type="button" className='deepthink-button'>{t.deepThink}</button>
+                  {/* 深度思考按钮 */}
+                  <button
+                    type="button"
+                    className={`deepthink-button ${isThinkingEnabled ? 'active' : ''}`}
+                    onClick={() => setIsThinkingEnabled(!isThinkingEnabled)}
+                    disabled={loading}
+                    title={isThinkingEnabled ? "点击关闭深度思考" : "点击开启深度思考"}
+                  >
+                    {t.deepThink}
+                  </button>
+
+                  {/* 联网搜索按钮 */}
                   <button
                     type="button"
                     className={`deepthink-button ${isSearchEnabled ? 'active' : ''}`}
                     onClick={() => setIsSearchEnabled(!isSearchEnabled)}
                     disabled={loading}
-                  >{t.webSearch}</button>
+                  >
+                    {t.webSearch}
+                  </button>
               </div>
               <button type="button" className='send-button' onClick={sendToLLM} disabled={loading}></button>
             </div>

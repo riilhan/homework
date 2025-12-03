@@ -435,3 +435,48 @@ body {
 .dark .message-content a {
     color: #8b9dff;
 }
+
+/* 思考过程样式 */
+.reasoning-block {
+    margin-bottom: 12px;
+    padding: 10px 14px;
+    background-color: rgba(0, 0, 0, 0.03);
+    border-left: 3px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #666;
+}
+
+.dark .reasoning-block {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-left-color: #555;
+    color: #aaa;
+}
+
+.reasoning-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 0.85em;
+    color: #888;
+    user-select: none;
+}
+
+.reasoning-icon {
+    font-size: 1.1em;
+}
+
+.reasoning-content p {
+    margin: 2px 0;
+    line-height: 1.5;
+}
+
+.main-response {
+    margin-top: 4px;
+}
+
+.main-response:empty {
+    display: none;
+}

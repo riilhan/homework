@@ -1,9 +1,18 @@
 import connectToDatabase from '../../../src/lib/db';
 import Conversation from '../../../src/models/conversation';
 
-// 豆包 API 配置
-const DOUBAO_API_URL = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
-const DOUBAO_API_KEY = '';
+// ==================================================================================
+// [旧配置] 豆包 API 配置 (已注释保留)
+// ==================================================================================
+// const DOUBAO_API_URL = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
+// const DOUBAO_API_KEY = 'YOUR_DOUBAO_KEY';
+
+// ==================================================================================
+// [新配置] 阿里云 Qwen (DashScope) 配置
+// ==================================================================================
+// 使用 OpenAI 兼容接口地址
+const DASHSCOPE_API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+const DASHSCOPE_API_KEY = '';
 
 // Tavily API 配置
 const TAVILY_API_URL = 'https://api.tavily.com/search';
@@ -47,7 +56,7 @@ const SYSTEM_PROMPT_ZH = `# 角色:
 - **回答**：针对用户的具体问题，提供简洁实用的建议。
 - **文字风格**：友好、鼓励、清晰。`;
 
-// --- 英文提示词 (新增) ---
+// --- 英文提示词 ---
 const SYSTEM_PROMPT_EN = `# Role:
 You are a professional coach, skilled in setting goals based on user interests and providing guidance.
 
@@ -110,42 +119,31 @@ async function searchWeb(query: string) {
 
 export const post = async ({ data }: { data: any }) => {
     console.log('==========收到请求 ==========');
-    console.log('请求参数:', JSON.stringify(data, null, 2));
 
     // 1. 尝试连接数据库
     try {
-        console.log('正在连接数据库...');
         await connectToDatabase();
-        console.log('数据库连接成功');
     } catch (e) {
         console.error("❌ 数据库连接失败:", e);
         return { code: 500, error: "Database connection failed" };
     }
 
-    try {
-        await connectToDatabase();
-    } catch (e) {
-        return { code: 500, error: "Database connection failed" };
-    }
-    // 2. 处理不同 Action
-    // A. 获取历史列表
+    // 2. 处理不同 Action (CRUD 保持不变)
     if (data.action === 'getHistory') {
-        console.log('Action: getHistory');
-        const list = await Conversation.find({ userId: 'user-1' }).sort({ updatedAt: -1 }).select('title updatedAt');
-        console.log(`找到 ${list.length} 条历史会话`);
-        return { code: 200, data: list };
+        try {
+            const list = await Conversation.find({ userId: 'user-1' }).sort({ updatedAt: -1 }).select('title updatedAt');
+            return { code: 200, data: list };
+        } catch (e) { return { code: 500, error: 'Get history failed' }; }
     }
 
-    // B. 获取详情
     if (data.action === 'getConversation') {
-        console.log(`Action: getConversation, ID: ${data.chatId}`);
-        const conv = await Conversation.findById(data.chatId);
-        return { code: 200, data: conv };
+        try {
+            const conv = await Conversation.findById(data.chatId);
+            return { code: 200, data: conv };
+        } catch (e) { return { code: 500, error: 'Get conversation failed' }; }
     }
 
-    // C. 保存 AI 消息
     if (data.action === 'saveAiMessage') {
-        console.log(`Action: saveAiMessage, ID: ${data.chatId}`);
         try {
             await Conversation.findByIdAndUpdate(data.chatId, {
                 $push: { messages: { role: 'assistant', content: data.content, timestamp: Date.now() } }
@@ -158,64 +156,50 @@ export const post = async ({ data }: { data: any }) => {
         }
     }
 
-        // 删除会话
     if (data.action === 'deleteSession') {
         try {
             await Conversation.findByIdAndDelete(data.chatId);
             return { code: 200, msg: 'Deleted' };
-        } catch (e) {
-            return { code: 500, error: '删除失败' };
-        }
+        } catch (e) { return { code: 500, error: '删除失败' }; }
     }
 
-    // 重命名会话
     if (data.action === 'renameSession') {
         try {
             await Conversation.findByIdAndUpdate(data.chatId, { title: data.title });
             return { code: 200, msg: 'Renamed' };
-        } catch (e) {
-            return { code: 500, error: '重命名失败' };
-        }
+        } catch (e) { return { code: 500, error: '重命名失败' }; }
     }
 
     // 3. 核心聊天逻辑
     try {
         console.log('进入聊天逻辑...');
-        const { message, useSearch, chatId, language = 'zh' } = data;
+        const { message, useSearch, chatId, language = 'zh', enableThinking = false } = data;
 
         let currentConversation;
         let finalSystemPrompt = language === 'en' ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT_ZH;
 
-
         // --- 数据库操作：保存用户消息 ---
         if (chatId) {
-            console.log(`更新已有会话: ${chatId}`);
             currentConversation = await Conversation.findById(chatId);
             if (currentConversation) {
                 currentConversation.messages.push({ role: 'user', content: message, timestamp: Date.now() });
                 currentConversation.updatedAt = new Date();
                 await currentConversation.save();
-                console.log('用户消息已追加');
-            } else {
-                console.warn('未找到指定ID的会话，将新建');
             }
         }
 
         if (!currentConversation) {
-            console.log('创建新会话');
             currentConversation = await Conversation.create({
                 userId: 'user-1',
                 title: generateTitle(message),
                 messages: [{ role: 'user', content: message, timestamp: Date.now() }]
             });
-            console.log(`新会话创建成功 ID: ${currentConversation._id}`);
         }
 
-        // 联网搜索
+        // 联网搜索逻辑
         if (useSearch) {
             const searchResults = await searchWeb(message);
             if (searchResults) {
-                 // 根据语言追加提示词
                 const searchPrompt = language === 'en'
                     ? `\n\nWeb Search Results:\n${searchResults}`
                     : `\n\n联网搜索资料:\n${searchResults}`;
@@ -223,7 +207,10 @@ export const post = async ({ data }: { data: any }) => {
             }
         }
 
-        // 调用 LLM
+        // ==================================================================================
+        // 豆包 API 调用
+        // ==================================================================================
+        /*
         console.log('正在请求豆包 API...');
         const response = await fetch(DOUBAO_API_URL, {
             method: 'POST',
@@ -240,14 +227,56 @@ export const post = async ({ data }: { data: any }) => {
                 stream: true
             }),
         });
+        */
+
+        // ==================================================================================
+        // Qwen (DashScope) API 调用
+        // ==================================================================================
+        console.log(`请求 DashScope (Model: qwen3-vl-plus, Thinking: ${enableThinking})...`);
+
+        const messagesPayload = [
+            {
+                role: 'system',
+                content: finalSystemPrompt
+            },
+            {
+                role: 'user',
+                content: [
+                    { type: 'text', text: message }
+                    // 未来如果支持图片，可以在这里 push { type: 'image_url', ... }
+                ]
+            }
+        ];
+
+        // 构造请求体
+        const requestBody: any = {
+            model: "qwen3-vl-plus", // 指定 VL 模型
+            messages: messagesPayload,
+            stream: true
+        };
+
+        // 开启深度思考参数
+        if (enableThinking) {
+            requestBody['enable_thinking'] = true;
+            requestBody['thinking_budget'] = 16384;
+        }
+
+        const response = await fetch(DASHSCOPE_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
+            },
+            body: JSON.stringify(requestBody),
+        });
 
         if (!response.ok) {
             const errText = await response.text();
-            console.error(`豆包API错误: ${response.status} - ${errText}`);
-            throw new Error(`豆包API请求失败: ${response.status}`);
+            console.error(`DashScope API错误: ${response.status} - ${errText}`);
+            throw new Error(`API请求失败: ${response.status}`);
         }
 
-        console.log('豆包API请求成功，准备流式返回');
+        console.log('API请求成功，开始流式传输...');
 
         // 返回流
         return new Response(
@@ -264,7 +293,6 @@ export const post = async ({ data }: { data: any }) => {
                             if (done) break;
                             controller.enqueue(value);
                         }
-                        console.log('流传输完成');
                     } catch (error) {
                         console.error('流读取错误:', error);
                     } finally {
