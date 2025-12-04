@@ -2,13 +2,13 @@ import connectToDatabase from '../../../src/lib/db';
 import Conversation from '../../../src/models/conversation';
 
 // ==================================================================================
-// [旧配置] 豆包 API 配置 (已注释保留)
+// 豆包 API 配置
 // ==================================================================================
 // const DOUBAO_API_URL = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
 // const DOUBAO_API_KEY = 'YOUR_DOUBAO_KEY';
 
 // ==================================================================================
-// [新配置] 阿里云 Qwen (DashScope) 配置
+// 阿里云 Qwen (DashScope) 配置
 // ==================================================================================
 // 使用 OpenAI 兼容接口地址
 const DASHSCOPE_API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
@@ -31,25 +31,22 @@ const SYSTEM_PROMPT_ZH = `# 角色:
 - 制定适合用户需求的方案目标。
 - 提供清晰、简洁且实用的建议。
 - 可以使用联网搜索工具，获取更多的信息。
+- **[新增能力] 视觉分析**：你可以接收用户上传的图片（可能有多张），识别图片内容并结合用户问题进行分析回答。
 
 ## 工作流程:
-1. **理解用户兴趣**：
-    - 分析用户输入的兴趣点，识别主要需求和目标。
-    - 根据用户兴趣的范围和深度，确定适合的目标类型。
+1. **理解用户输入**：
+    - 分析用户输入的文本和图片内容。
+    - 识别主要需求和目标。
 2. **设定方案目标**：
     - 根据用户兴趣，提供可操作性强、具体且符合用户背景的目标设定。
-    - 确保目标具有明确的时间框架和可衡量的标准。
 3. **回答用户问题**：
-    - 在日常对话或用户提问时，提供针对性强的回答。
-    - 回答需简单明了，并且能切实帮助用户实现目标。
+    - 结合图片和文本提供针对性回答。
 4. **持续调整与优化**：
-    - 根据用户的反馈，调整目标和建议以更好地满足用户需求。
     - 提供鼓励和指导，帮助用户保持动力。
 
 ## 约束:
-- 必须根据用户输入的兴趣设定目标，不能随意设定与用户兴趣无关的目标。
-- 回答必须简单且可行，不能提供复杂或难以执行的建议。
-- 目标设定需具体且具有可衡量性，避免模糊不清。
+- 回答必须简单且可行。
+- 目标设定需具体且具有可衡量性。
 
 ## 输出格式:
 - **目标设定**：以清晰的文字描述用户的方案目标，包含时间框架和衡量标准。
@@ -71,24 +68,25 @@ You are a professional coach, skilled in setting goals based on user interests a
 - Formulate plan goals suitable for user needs.
 - Provide clear, concise, and practical advice.
 - Use web search tools to obtain more information.
+- **[New Skill] Vision Analysis**: You can accept multiple images uploaded by users, recognize the content, and answer based on the images.
 
 ## Constraints:
-- Must set goals based on user input; do not set unrelated goals.
 - Answers must be simple and feasible.
-- Goals must be specific and measurable.
 
 ## Output Format:
-- **Goal Setting**: Describe the user's plan goal clearly, including timeframes and metrics.
-- **Answer**: Provide concise and practical advice for specific questions.
 - **Tone**: Friendly, encouraging, clear.`;
 
 // 生成会话列表标题
 function generateTitle(message: string) {
-    return message.slice(0, 15) + (message.length > 15 ? '...' : '');
+    if (message && message.trim()) {
+        return message.slice(0, 15) + (message.length > 15 ? '...' : '');
+    }
+    return '[图片会话]';
 }
 
 // 搜索工具
 async function searchWeb(query: string) {
+    if (!query) return '';
     console.log(`正在执行搜索: ${query}`);
     try {
         const response = await fetch(TAVILY_API_URL, {
@@ -102,17 +100,12 @@ async function searchWeb(query: string) {
                 max_results: 5
             })
         });
-        if (!response.ok) {
-            console.error(`搜索API响应错误: ${response.status}`);
-            return '';
-        }
+        if (!response.ok) return '';
         const data = await response.json();
-        console.log(`搜索成功，结果数量: ${data.results?.length || 0}`);
         return (data.results || []).map((item: any, i: number) =>
             `[${i+1}] ${item.title}: ${item.content}`
         ).join('\n\n');
     } catch (error) {
-        console.error('搜索抛出异常:', error);
         return '';
     }
 }
@@ -128,7 +121,7 @@ export const post = async ({ data }: { data: any }) => {
         return { code: 500, error: "Database connection failed" };
     }
 
-    // 2. 处理不同 Action (CRUD 保持不变)
+    // 2. 处理不同 Action
     if (data.action === 'getHistory') {
         try {
             const list = await Conversation.find({ userId: 'user-1' }).sort({ updatedAt: -1 }).select('title updatedAt');
@@ -150,10 +143,7 @@ export const post = async ({ data }: { data: any }) => {
             });
             console.log('AI消息保存成功');
             return { code: 200, msg: 'Saved' };
-        } catch (e) {
-            console.error('保存AI消息失败:', e);
-            return { code: 500, error: 'Save failed' };
-        }
+        } catch (e) { return { code: 500, error: 'Save failed' }; }
     }
 
     if (data.action === 'deleteSession') {
@@ -173,16 +163,26 @@ export const post = async ({ data }: { data: any }) => {
     // 3. 核心聊天逻辑
     try {
         console.log('进入聊天逻辑...');
-        const { message, useSearch, chatId, language = 'zh', enableThinking = false } = data;
+        // 接收 images 数组，默认为空
+        const { message, useSearch, chatId, language = 'zh', enableThinking = false, images = [] } = data;
 
         let currentConversation;
         let finalSystemPrompt = language === 'en' ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT_ZH;
 
         // --- 数据库操作：保存用户消息 ---
+        // 为了在历史记录中区分，如果有多张图片，存一个简单的标记
+        const userContentToSave = (images.length > 0)
+            ? `${message || ''} [发送了 ${images.length} 张图片]`
+            : message;
+
         if (chatId) {
             currentConversation = await Conversation.findById(chatId);
             if (currentConversation) {
-                currentConversation.messages.push({ role: 'user', content: message, timestamp: Date.now() });
+                currentConversation.messages.push({
+                    role: 'user',
+                    content: userContentToSave,
+                    timestamp: Date.now()
+                });
                 currentConversation.updatedAt = new Date();
                 await currentConversation.save();
             }
@@ -192,12 +192,12 @@ export const post = async ({ data }: { data: any }) => {
             currentConversation = await Conversation.create({
                 userId: 'user-1',
                 title: generateTitle(message),
-                messages: [{ role: 'user', content: message, timestamp: Date.now() }]
+                messages: [{ role: 'user', content: userContentToSave, timestamp: Date.now() }]
             });
         }
 
-        // 联网搜索逻辑
-        if (useSearch) {
+        // 联网搜索逻辑 (仅当有文本时搜索)
+        if (useSearch && message) {
             const searchResults = await searchWeb(message);
             if (searchResults) {
                 const searchPrompt = language === 'en'
@@ -208,31 +208,30 @@ export const post = async ({ data }: { data: any }) => {
         }
 
         // ==================================================================================
-        // 豆包 API 调用
-        // ==================================================================================
-        /*
-        console.log('正在请求豆包 API...');
-        const response = await fetch(DOUBAO_API_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${DOUBAO_API_KEY}`,
-            },
-            body: JSON.stringify({
-                model: 'doubao-seed-1-6-lite-251015',
-                messages: [
-                    { role: 'system', content: [{ type: 'text', text: finalSystemPrompt }] },
-                    { role: 'user', content: [{ type: 'text', text: message }] }
-                ],
-                stream: true
-            }),
-        });
-        */
-
-        // ==================================================================================
         // Qwen (DashScope) API 调用
         // ==================================================================================
-        console.log(`请求 DashScope (Model: qwen3-vl-plus, Thinking: ${enableThinking})...`);
+        console.log(`请求 DashScope (Model: qwen3-vl-plus, Thinking: ${enableThinking}, Images Count: ${images.length})...`);
+
+        const userContent: any[] = [];
+
+        // 遍历图片数组，构造多个 image_url 对象
+        // 注意：qwen3-vl-plus 支持多图输入
+        if (images && images.length > 0) {
+            images.forEach((imgBase64: string) => {
+                userContent.push({
+                    type: "image_url",
+                    image_url: { url: imgBase64 }
+                });
+            });
+        }
+
+        // 添加文本
+        if (message) {
+            userContent.push({ type: "text", text: message });
+        } else if (images.length > 0 && userContent.length === images.length) {
+            // 如果只有图片没有文字，给一个默认提示，防止 API 报错
+            userContent.push({ type: "text", text: language === 'en' ? "Please analyze these images." : "请分析这些图片的内容。" });
+        }
 
         const messagesPayload = [
             {
@@ -241,21 +240,17 @@ export const post = async ({ data }: { data: any }) => {
             },
             {
                 role: 'user',
-                content: [
-                    { type: 'text', text: message }
-                    // 未来如果支持图片，可以在这里 push { type: 'image_url', ... }
-                ]
+                content: userContent
             }
         ];
 
         // 构造请求体
         const requestBody: any = {
-            model: "qwen3-vl-plus", // 指定 VL 模型
+            model: "qwen3-vl-plus",
             messages: messagesPayload,
             stream: true
         };
 
-        // 开启深度思考参数
         if (enableThinking) {
             requestBody['enable_thinking'] = true;
             requestBody['thinking_budget'] = 16384;

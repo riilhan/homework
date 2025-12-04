@@ -7,6 +7,8 @@ interface Message {
   id: string;
   content: string;
   reasoning?: string;
+  // 支持图片数组，兼容旧数据的单图
+  imageUrls?: string[];
   role: 'user' | 'assistant';
   timestamp: number;
 }
@@ -36,7 +38,9 @@ const locales = {
     loadDetailFailed: "加载会话详情失败",
     emptyResponseBody: "响应体为空",
     saveMessageFailed: "后台保存消息失败",
-    requestProcessError: "请求流程出错"
+    requestProcessError: "请求流程出错",
+    imageSelect: "选择图片",
+    maxImageWarning: "一次最多只能上传 4 张图片"
   },
   en: {
     greet: "Hello, welcome to AI Task Assistant",
@@ -55,9 +59,28 @@ const locales = {
     loadDetailFailed: "Failed to load session details",
     emptyResponseBody: "Response body is empty",
     saveMessageFailed: "Failed to save message in background",
-    requestProcessError: "Request process error"
+    requestProcessError: "Request process error",
+    imageSelect: "Select Image",
+    maxImageWarning: "Max 4 images allowed at once"
   }
 };
+
+// 图片图标 SVG
+const ImageIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+    <polyline points="21 15 16 10 5 21"></polyline>
+  </svg>
+);
+
+// 关闭图标 SVG
+const CloseIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"></line>
+    <line x1="6" y1="6" x2="18" y2="18"></line>
+  </svg>
+);
 
 const Index = () => {
   const [hasMessage, setHasMessage] = useState(false);
@@ -68,6 +91,10 @@ const Index = () => {
   // 功能开关状态
   const [isSearchEnabled, setIsSearchEnabled] = useState(false);
   const [isThinkingEnabled, setIsThinkingEnabled] = useState(false);
+
+  // 多图状态：使用字符串数组
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -83,18 +110,16 @@ const Index = () => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, waitingForAI]);
+  }, [messages, waitingForAI, selectedImages]);
 
   // 获取当前语言的字典
   const t = locales[language];
 
-  // 切换语言的处理函数
   const handleLanguageChange = (lang: string) => {
     const newLang = lang === 'English' || lang === 'en' ? 'en' : 'zh';
     setLanguage(newLang);
   };
 
-  // 获取列表
   const fetchChatList = async () => {
     try {
       const res = await fetch('/api/chat', {
@@ -111,7 +136,6 @@ const Index = () => {
 
   useEffect(() => { fetchChatList(); }, [language]);
 
-  // 删除会话
   const handleDeleteSession = async (chatId: string) => {
       try {
           const res = await fetch('/api/chat', {
@@ -128,7 +152,6 @@ const Index = () => {
       }
   };
 
-  // 重命名会话
   const handleRenameSession = async (chatId: string, newTitle: string) => {
       try {
           const res = await fetch('/api/chat', {
@@ -142,7 +165,6 @@ const Index = () => {
       }
   };
 
-  // 加载会话详情
   const loadChatSession = async (chatId: string) => {
     if (chatId === activeChatId) return;
     setLoading(true);
@@ -157,7 +179,11 @@ const Index = () => {
         const historyMessages: Message[] = data.data.messages.map((msg: any) => ({
           id: msg._id || `msg-${msg.timestamp}`,
           content: msg.content,
-          reasoning: msg.reasoning, // 如果数据库未来支持存思考过程，这里可以加载
+          reasoning: msg.reasoning,
+          // 兼容历史数据：有些可能是 image (单字符串)，有些是 imageUrls (数组)
+          imageUrls: msg.imageUrls
+            ? msg.imageUrls
+            : (msg.imageUrl ? [msg.imageUrl] : []),
           role: msg.role,
           timestamp: msg.timestamp
         }));
@@ -165,6 +191,7 @@ const Index = () => {
         setHasMessage(historyMessages.length > 0);
         setActiveChatId(chatId);
         setInputText('');
+        setSelectedImages([]);
         setStreamingMessageId(null);
       }
     } catch (e) {
@@ -178,6 +205,7 @@ const Index = () => {
     setMessages([]);
     setHasMessage(false);
     setInputText('');
+    setSelectedImages([]);
     setWaitingForAI(false);
     setStreamingMessageId(null);
     setIsSearchEnabled(false);
@@ -185,7 +213,6 @@ const Index = () => {
     setActiveChatId(null);
   };
 
-  // 添加错误消息
   const appendErrorMessage = (text: string) => {
       setMessages(prev => [
           ...prev,
@@ -198,12 +225,50 @@ const Index = () => {
       ]);
   };
 
-  // 发送消息
+  // 处理图片选择 (支持多图)
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+
+    // 限制：现有图片 + 新选图片不能超过 4 张
+    if (selectedImages.length + files.length > 4) {
+      alert(t.maxImageWarning);
+      return;
+    }
+
+    // 遍历读取文件
+    files.forEach(file => {
+      if (!['image/jpeg', 'image/png'].includes(file.type)) {
+        return; // 跳过非图片
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        if (result) {
+          setSelectedImages(prev => [...prev, result]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // 清空 input 允许重复选择相同文件
+    if(fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // 移除指定位置的图片
+  const removeImage = (indexToRemove: number) => {
+    setSelectedImages(prev => prev.filter((_, index) => index !== indexToRemove));
+  };
+
   const sendToLLM = async() => {
-    if(loading || !inputText.trim()) return;
+    // 如果有图片数组，允许发送
+    if(loading || (!inputText.trim() && selectedImages.length === 0)) return;
+
     const userMessage: Message = {
       id: Date.now().toString(),
       content: inputText.trim(),
+      // 存储图片数组
+      imageUrls: selectedImages.length > 0 ? [...selectedImages] : undefined,
       role: 'user',
       timestamp: Date.now()
     };
@@ -212,12 +277,14 @@ const Index = () => {
     setHasMessage(true);
 
     const messageToSend = inputText;
+    const imagesToSend = selectedImages;
     const useSearch = isSearchEnabled;
     const useThinking = isThinkingEnabled;
     const currentChatId = activeChatId;
     const currentLang = language;
 
     setInputText('');
+    setSelectedImages([]);
     setLoading(true);
     setWaitingForAI(true);
     setStreamingMessageId(null);
@@ -228,6 +295,7 @@ const Index = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: messageToSend,
+          images: imagesToSend,
           useSearch: useSearch,
           enableThinking: useThinking,
           chatId: currentChatId,
@@ -308,7 +376,6 @@ const Index = () => {
 
       const finalChatId = newChatId || activeChatId;
       if (finalChatId && fullContent) {
-        // 目前仅保存最终回复内容，若需保存思考过程需修改数据库Schema
         fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -348,9 +415,17 @@ const Index = () => {
               {messages.map((message) => (
                 <div key={message.id} className={`message ${message.role}-message`}>
                   <div className="message-content">
+                    {/* [修改] 渲染多张图片 */}
+                    {message.role === 'user' && message.imageUrls && message.imageUrls.length > 0 && (
+                      <div className="message-images-grid">
+                        {message.imageUrls.map((imgUrl, index) => (
+                          <img key={index} src={imgUrl} alt={`Upload ${index}`} className="message-image" />
+                        ))}
+                      </div>
+                    )}
+
                     {message.role === 'assistant' ? (
                         <div>
-                          {/* 如果有思考过程，渲染思考区块 */}
                           {message.reasoning && (
                             <div className="reasoning-block">
                                 <div className="reasoning-header">
@@ -362,8 +437,6 @@ const Index = () => {
                                 </div>
                             </div>
                           )}
-
-                          {/* 渲染正文回复 */}
                           <div className="main-response">
                             <ReactMarkdown>{message.content}</ReactMarkdown>
                           </div>
@@ -379,7 +452,6 @@ const Index = () => {
                 <div className="message assistant-message">
                   <div className="message-content">
                     <div className="typing-animation"><span></span><span></span><span></span></div>
-                    {/* 根据状态显示不同的提示语 */}
                     <div style={{fontSize: '12px', color: '#999', marginTop: '5px'}}>
                         {isThinkingEnabled ? t.thinking : (isSearchEnabled ? t.searching : "")}
                     </div>
@@ -393,8 +465,23 @@ const Index = () => {
           {!hasMessage && <p className='greet-text'>{t.greet}</p>}
 
           <div className='input-container'>
+            {/* 多图预览区域 - 遍历 selectedImages */}
+            {selectedImages.length > 0 && (
+              <div className="image-preview-container">
+                {selectedImages.map((img, index) => (
+                  <div key={index} className="preview-wrapper">
+                    <img src={img} alt={`Preview ${index}`} className="preview-image" />
+                    <button className="close-preview-btn" onClick={() => removeImage(index)}>
+                      <CloseIcon />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <textarea
-              className='text-section'
+              // 根据图片数量动态调整样式
+              className={`text-section ${selectedImages.length > 0 ? 'has-image' : ''}`}
               placeholder={t.placeholder}
               value={inputText}
               disabled={loading}
@@ -403,7 +490,6 @@ const Index = () => {
             />
             <div className='button-items'>
               <div className="feature-buttons">
-                  {/* 深度思考按钮 */}
                   <button
                     type="button"
                     className={`deepthink-button ${isThinkingEnabled ? 'active' : ''}`}
@@ -414,7 +500,6 @@ const Index = () => {
                     {t.deepThink}
                   </button>
 
-                  {/* 联网搜索按钮 */}
                   <button
                     type="button"
                     className={`deepthink-button ${isSearchEnabled ? 'active' : ''}`}
@@ -422,6 +507,25 @@ const Index = () => {
                     disabled={loading}
                   >
                     {t.webSearch}
+                  </button>
+
+                  {/* 图片按钮增加 multiple 属性 */}
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png"
+                    ref={fileInputRef}
+                    style={{display: 'none'}}
+                    onChange={handleImageSelect}
+                    multiple
+                  />
+                  <button
+                    type="button"
+                    className="deepthink-button image-upload-button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={loading}
+                    title={t.imageSelect}
+                  >
+                    <ImageIcon />
                   </button>
               </div>
               <button type="button" className='send-button' onClick={sendToLLM} disabled={loading}></button>

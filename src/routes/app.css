@@ -480,3 +480,94 @@ body {
 .main-response:empty {
     display: none;
 }
+
+.close-preview-btn {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background-color: #ff4d4f;
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    transition: transform 0.2s;
+    z-index: 11;
+}
+.close-preview-btn:hover { transform: scale(1.1); }
+
+/* 当存在图片时，给输入框增加顶部内边距，防止文字被图片遮挡 */
+.text-section.has-image {
+    padding-top: 60px !important;
+}
+
+
+/* 图片预览区域 - Flex 布局以支持多图 */
+.image-preview-container {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 10;
+    animation: fadeIn 0.3s ease;
+    pointer-events: auto;
+
+    display: flex;
+    gap: 8px;
+    max-width: 90%;
+    overflow-x: auto;
+}
+
+/* 隐藏滚动条 */
+.image-preview-container::-webkit-scrollbar {
+    display: none;
+}
+
+/* 预览容器包装 */
+.preview-wrapper {
+    position: relative;
+    display: inline-block;
+    padding: 3px;
+    background: var(--shell-color);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+.dark .preview-wrapper { background: #2d2d2d; border-color: #444; }
+
+/* 预览图片 */
+.preview-image {
+    height: 40px;
+    width: auto;
+    border-radius: 4px;
+    display: block;
+}
+
+/* 消息列表中的多图网格 */
+.message-images-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+/* 消息中的图片样式 */
+.message-image {
+    max-width: 300px;
+    max-height: 300px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 2px solid rgba(255,255,255,0.2);
+}
+
+.image-upload-button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
