@@ -2,15 +2,15 @@ import connectToDatabase from '../../../src/lib/db';
 import Conversation from '../../../src/models/conversation';
 
 // ==================================================================================
-// 豆包 API 配置
+// [恢复] 豆包 API 配置 (用于 Critic/评估模型)
 // ==================================================================================
-// const DOUBAO_API_URL = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
-// const DOUBAO_API_KEY = 'YOUR_DOUBAO_KEY';
+const DOUBAO_API_URL = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
+const DOUBAO_API_KEY = '';
+const DOUBAO_MODEL = 'doubao-seed-1-6-lite-251015';
 
 // ==================================================================================
-// 阿里云 Qwen (DashScope) 配置
+// 阿里云 Qwen (DashScope) 配置 (用于 Actor/生成模型)
 // ==================================================================================
-// 使用 OpenAI 兼容接口地址
 const DASHSCOPE_API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 const DASHSCOPE_API_KEY = '';
 
@@ -76,7 +76,36 @@ You are a professional coach, skilled in setting goals based on user interests a
 ## Output Format:
 - **Tone**: Friendly, encouraging, clear.`;
 
-// 生成会话列表标题
+
+// 评估专用的 System Prompt
+const CRITIC_PROMPT_ZH = `# 角色:
+你是一名严谨的“事实核查员”和“逻辑校验官”。
+
+## 任务:
+你的任务是评估另一个AI模型对用户问题的回答是否准确、逻辑是否自洽。
+
+## 输入格式:
+用户问题: [Question]
+模型回答: [Answer]
+
+## 要求:
+1. **准确性核查**: 检查回答中是否有明显的事实错误。
+2. **逻辑性核查**: 检查推导过程是否合理。
+3. **输出风格**: 直接给出简短的评语。如果是正确的，给予肯定；如果有错误，请指出具体错误点。不要重新回答问题，只做点评。
+4. **格式**: 开头先给出一个评分(0-10分)，然后进行简评。`;
+
+const CRITIC_PROMPT_EN = `# Role:
+You are a strict "Fact Checker" and "Logic Validator".
+
+## Task:
+Evaluate the accuracy and logical consistency of another AI model's answer to a user's question.
+
+## Requirements:
+1. Check for factual errors.
+2. Check for logical fallacies.
+3. Provide a concise critique. Start with a score (0-10), then explain. Do not re-answer the question, just critique.`;
+
+// 生成标题
 function generateTitle(message: string) {
     if (message && message.trim()) {
         return message.slice(0, 15) + (message.length > 15 ? '...' : '');
@@ -113,81 +142,34 @@ async function searchWeb(query: string) {
 export const post = async ({ data }: { data: any }) => {
     console.log('==========收到请求 ==========');
 
-    // 1. 尝试连接数据库
-    try {
-        await connectToDatabase();
-    } catch (e) {
-        console.error("❌ 数据库连接失败:", e);
-        return { code: 500, error: "Database connection failed" };
-    }
+    // 1. DB 连接
+    try { await connectToDatabase(); } catch (e) { return { code: 500, error: "Database connection failed" }; }
 
-    // 2. 处理不同 Action
-    if (data.action === 'getHistory') {
-        try {
-            const list = await Conversation.find({ userId: 'user-1' }).sort({ updatedAt: -1 }).select('title updatedAt');
-            return { code: 200, data: list };
-        } catch (e) { return { code: 500, error: 'Get history failed' }; }
-    }
-
-    if (data.action === 'getConversation') {
-        try {
-            const conv = await Conversation.findById(data.chatId);
-            return { code: 200, data: conv };
-        } catch (e) { return { code: 500, error: 'Get conversation failed' }; }
-    }
-
-    if (data.action === 'saveAiMessage') {
-        try {
-            await Conversation.findByIdAndUpdate(data.chatId, {
-                $push: { messages: { role: 'assistant', content: data.content, timestamp: Date.now() } }
-            });
-            console.log('AI消息保存成功');
-            return { code: 200, msg: 'Saved' };
-        } catch (e) { return { code: 500, error: 'Save failed' }; }
-    }
-
-    if (data.action === 'deleteSession') {
-        try {
-            await Conversation.findByIdAndDelete(data.chatId);
-            return { code: 200, msg: 'Deleted' };
-        } catch (e) { return { code: 500, error: '删除失败' }; }
-    }
-
-    if (data.action === 'renameSession') {
-        try {
-            await Conversation.findByIdAndUpdate(data.chatId, { title: data.title });
-            return { code: 200, msg: 'Renamed' };
-        } catch (e) { return { code: 500, error: '重命名失败' }; }
-    }
+    // 2. CRUD Actions
+    if (data.action === 'getHistory') { /*...*/ const list = await Conversation.find({ userId: 'user-1' }).sort({ updatedAt: -1 }).select('title updatedAt'); return { code: 200, data: list }; }
+    if (data.action === 'getConversation') { /*...*/ const conv = await Conversation.findById(data.chatId); return { code: 200, data: conv }; }
+    if (data.action === 'saveAiMessage') { /*...*/ await Conversation.findByIdAndUpdate(data.chatId, { $push: { messages: { role: 'assistant', content: data.content, timestamp: Date.now() } } }); return { code: 200, msg: 'Saved' }; }
+    if (data.action === 'deleteSession') { /*...*/ await Conversation.findByIdAndDelete(data.chatId); return { code: 200, msg: 'Deleted' }; }
+    if (data.action === 'renameSession') { /*...*/ await Conversation.findByIdAndUpdate(data.chatId, { title: data.title }); return { code: 200, msg: 'Renamed' }; }
 
     // 3. 核心聊天逻辑
     try {
-        console.log('进入聊天逻辑...');
-        // 接收 images 数组，默认为空
-        const { message, useSearch, chatId, language = 'zh', enableThinking = false, images = [] } = data;
+        // 接收 enableTestMode 参数
+        const { message, useSearch, chatId, language = 'zh', enableThinking = false, images = [], enableTestMode = false } = data;
 
         let currentConversation;
         let finalSystemPrompt = language === 'en' ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT_ZH;
 
-        // --- 数据库操作：保存用户消息 ---
-        // 为了在历史记录中区分，如果有多张图片，存一个简单的标记
-        const userContentToSave = (images.length > 0)
-            ? `${message || ''} [发送了 ${images.length} 张图片]`
-            : message;
-
+        // DB 操作
+        const userContentToSave = (images.length > 0) ? `${message || ''} [发送了 ${images.length} 张图片]` : message;
         if (chatId) {
             currentConversation = await Conversation.findById(chatId);
             if (currentConversation) {
-                currentConversation.messages.push({
-                    role: 'user',
-                    content: userContentToSave,
-                    timestamp: Date.now()
-                });
+                currentConversation.messages.push({ role: 'user', content: userContentToSave, timestamp: Date.now() });
                 currentConversation.updatedAt = new Date();
                 await currentConversation.save();
             }
         }
-
         if (!currentConversation) {
             currentConversation = await Conversation.create({
                 userId: 'user-1',
@@ -196,58 +178,33 @@ export const post = async ({ data }: { data: any }) => {
             });
         }
 
-        // 联网搜索逻辑 (仅当有文本时搜索)
+        // 联网搜索
         if (useSearch && message) {
             const searchResults = await searchWeb(message);
             if (searchResults) {
-                const searchPrompt = language === 'en'
-                    ? `\n\nWeb Search Results:\n${searchResults}`
-                    : `\n\n联网搜索资料:\n${searchResults}`;
-                finalSystemPrompt += searchPrompt;
+                finalSystemPrompt += (language === 'en' ? `\n\nWeb Search Results:\n${searchResults}` : `\n\n联网搜索资料:\n${searchResults}`);
             }
         }
 
-        // ==================================================================================
-        // Qwen (DashScope) API 调用
-        // ==================================================================================
-        console.log(`请求 DashScope (Model: qwen3-vl-plus, Thinking: ${enableThinking}, Images Count: ${images.length})...`);
+        // 构造 DashScope (Qwen) 请求
+        console.log(`Step 1: 请求 Qwen (Thinking: ${enableThinking}, TestMode: ${enableTestMode})...`);
 
         const userContent: any[] = [];
-
-        // 遍历图片数组，构造多个 image_url 对象
-        // 注意：qwen3-vl-plus 支持多图输入
         if (images && images.length > 0) {
-            images.forEach((imgBase64: string) => {
-                userContent.push({
-                    type: "image_url",
-                    image_url: { url: imgBase64 }
-                });
-            });
+            images.forEach((img: string) => userContent.push({ type: "image_url", image_url: { url: img } }));
         }
-
-        // 添加文本
         if (message) {
             userContent.push({ type: "text", text: message });
-        } else if (images.length > 0 && userContent.length === images.length) {
-            // 如果只有图片没有文字，给一个默认提示，防止 API 报错
-            userContent.push({ type: "text", text: language === 'en' ? "Please analyze these images." : "请分析这些图片的内容。" });
+        } else if (images.length > 0) {
+            userContent.push({ type: "text", text: language === 'en' ? "Analyze images" : "请分析图片" });
         }
 
-        const messagesPayload = [
-            {
-                role: 'system',
-                content: finalSystemPrompt
-            },
-            {
-                role: 'user',
-                content: userContent
-            }
-        ];
-
-        // 构造请求体
         const requestBody: any = {
             model: "qwen3-vl-plus",
-            messages: messagesPayload,
+            messages: [
+                { role: 'system', content: finalSystemPrompt },
+                { role: 'user', content: userContent }
+            ],
             stream: true
         };
 
@@ -256,40 +213,114 @@ export const post = async ({ data }: { data: any }) => {
             requestBody['thinking_budget'] = 16384;
         }
 
-        const response = await fetch(DASHSCOPE_API_URL, {
+        const qwenResponse = await fetch(DASHSCOPE_API_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DASHSCOPE_API_KEY}` },
             body: JSON.stringify(requestBody),
         });
 
-        if (!response.ok) {
-            const errText = await response.text();
-            console.error(`DashScope API错误: ${response.status} - ${errText}`);
-            throw new Error(`API请求失败: ${response.status}`);
-        }
+        if (!qwenResponse.ok) throw new Error(`Qwen API Error: ${qwenResponse.status}`);
 
-        console.log('API请求成功，开始流式传输...');
-
-        // 返回流
+        // 流式编排
         return new Response(
             new ReadableStream({
                 async start(controller) {
-                    const reader = response.body?.getReader();
-                    if (!reader) {
-                        controller.close();
-                        return;
-                    }
+                    const reader = qwenResponse.body?.getReader();
+                    const decoder = new TextDecoder();
+                    let fullAnswerContent = ""; // 用于缓存千问的完整回答
+
+                    if (!reader) { controller.close(); return; }
+
                     try {
+                        // 1. 处理千问流
                         while (true) {
                             const { done, value } = await reader.read();
                             if (done) break;
+
+                            // 转发给前端
                             controller.enqueue(value);
+
+                            // 如果开启了测试模式，需要在后端累积回答内容
+                            if (enableTestMode) {
+                                const chunkStr = decoder.decode(value, { stream: true });
+                                const lines = chunkStr.split('\n');
+                                for (const line of lines) {
+                                    if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+                                        try {
+                                            const json = JSON.parse(line.slice(6));
+                                            const content = json.choices[0]?.delta?.content || "";
+                                            fullAnswerContent += content;
+                                        } catch (e) { }
+                                    }
+                                }
+                            }
                         }
+
+                        // 2. 如果开启测试模式，调用豆包进行评估
+                        if (enableTestMode && fullAnswerContent.trim()) {
+                            console.log("Step 2: Qwen 完成，请求豆包评估...");
+
+                            const criticPrompt = language === 'en' ? CRITIC_PROMPT_EN : CRITIC_PROMPT_ZH;
+                            const userQueryText = message || "[图片分析]";
+                            const evalInput = `用户问题: ${userQueryText}\n模型回答: ${fullAnswerContent}`;
+
+                            const doubaoResponse = await fetch(DOUBAO_API_URL, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${DOUBAO_API_KEY}`,
+                                },
+                                body: JSON.stringify({
+                                    model: DOUBAO_MODEL,
+                                    messages: [
+                                        { role: 'system', content: criticPrompt },
+                                        { role: 'user', content: evalInput }
+                                    ],
+                                    stream: true
+                                }),
+                            });
+
+                            if (doubaoResponse.ok && doubaoResponse.body) {
+                                const dbReader = doubaoResponse.body.getReader();
+                                const dbDecoder = new TextDecoder();
+
+                                while (true) {
+                                    const { done, value } = await dbReader.read();
+                                    if (done) break;
+
+                                    const chunkStr = dbDecoder.decode(value, { stream: true });
+                                    const lines = chunkStr.split('\n');
+
+                                    for (const line of lines) {
+                                        if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+                                            try {
+                                                const json = JSON.parse(line.slice(6));
+                                                const content = json.choices[0]?.delta?.content || "";
+                                                if (content) {
+                                                    // 构造伪造的 SSE 数据包，使用 evaluation_content 字段
+                                                    // 前端会监听这个字段并渲染到评估区域
+                                                    const customPacket = {
+                                                        choices: [{
+                                                            delta: { evaluation_content: content }
+                                                        }]
+                                                    };
+                                                    const sseString = `data: ${JSON.stringify(customPacket)}\n\n`;
+                                                    controller.enqueue(new TextEncoder().encode(sseString));
+                                                }
+                                            } catch (e) { }
+                                        }
+                                    }
+                                }
+                            } else {
+                                console.error("Doubao API Error");
+                            }
+                        }
+
+                        // 结束流
+                        controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+
                     } catch (error) {
-                        console.error('流读取错误:', error);
+                        console.error('Stream Error:', error);
                     } finally {
                         controller.close();
                         reader.releaseLock();
@@ -297,19 +328,12 @@ export const post = async ({ data }: { data: any }) => {
                 }
             }),
             {
-                headers: {
-                    'Content-Type': 'text/plain; charset=utf-8',
-                    'Transfer-Encoding': 'chunked',
-                    'x-chat-id': currentConversation._id.toString()
-                },
+                headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Transfer-Encoding': 'chunked', 'x-chat-id': currentConversation._id.toString() },
             }
         );
 
     } catch (error: any) {
-        console.error('❌ 全局错误捕获:', error);
-        return {
-            code: 500,
-            data: { reply: `服务端错误: ${error.message}` }
-        };
+        console.error('❌ Global Error:', error);
+        return { code: 500, data: { reply: `Server Error: ${error.message}` } };
     }
 };

@@ -3,11 +3,14 @@ import ReactMarkdown from 'react-markdown';
 import './app.css';
 import Sidebar from '../components/Sidebar';
 
+// 是否显示测试模式按钮
+const IS_TEST_MODE_AVAILABLE = true;
+
 interface Message {
   id: string;
   content: string;
   reasoning?: string;
-  // 支持图片数组，兼容旧数据的单图
+  evaluation?: string;
   imageUrls?: string[];
   role: 'user' | 'assistant';
   timestamp: number;
@@ -25,9 +28,11 @@ const locales = {
     greet: "你好，欢迎使用任务助手",
     placeholder: "请输入消息...",
     deepThink: "深度思考",
+    testMode: "测试模式",
     webSearch: "联网搜索",
     searching: "正在联网搜索...",
     thinking: "正在深度思考...",
+    evaluating: "正在评估回答准确性...",
     error: "出错了",
     deleteFail: "删除失败，请稍后重试",
     renameFail: "重命名失败",
@@ -40,15 +45,18 @@ const locales = {
     saveMessageFailed: "后台保存消息失败",
     requestProcessError: "请求流程出错",
     imageSelect: "选择图片",
-    maxImageWarning: "一次最多只能上传 4 张图片"
+    maxImageWarning: "一次最多只能上传 4 张图片",
+    evaluationTitle: "模型回答评估 (Doubao)"
   },
   en: {
     greet: "Hello, welcome to AI Task Assistant",
     placeholder: "Type a message...",
     deepThink: "Deep Think",
+    testMode: "Test Mode",
     webSearch: "Web Search",
     searching: "Searching the web...",
     thinking: "Thinking deeply...",
+    evaluating: "Evaluating answer accuracy...",
     error: "Error",
     deleteFail: "Delete failed, please try again",
     renameFail: "Rename failed",
@@ -61,26 +69,15 @@ const locales = {
     saveMessageFailed: "Failed to save message in background",
     requestProcessError: "Request process error",
     imageSelect: "Select Image",
-    maxImageWarning: "Max 4 images allowed at once"
+    maxImageWarning: "Max 4 images allowed at once",
+    evaluationTitle: "Answer Evaluation (Doubao)"
   }
 };
 
-// 图片图标 SVG
-const ImageIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-    <circle cx="8.5" cy="8.5" r="1.5"></circle>
-    <polyline points="21 15 16 10 5 21"></polyline>
-  </svg>
-);
-
-// 关闭图标 SVG
-const CloseIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18"></line>
-    <line x1="6" y1="6" x2="18" y2="18"></line>
-  </svg>
-);
+// SVG 图标
+const ImageIcon = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>);
+const CloseIcon = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>);
+const FlaskIcon = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2v7.31"/><path d="M14 2v7.31"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/></svg>);
 
 const Index = () => {
   const [hasMessage, setHasMessage] = useState(false);
@@ -91,8 +88,9 @@ const Index = () => {
   // 功能开关状态
   const [isSearchEnabled, setIsSearchEnabled] = useState(false);
   const [isThinkingEnabled, setIsThinkingEnabled] = useState(false);
+  // 测试模式状态
+  const [isTestModeEnabled, setIsTestModeEnabled] = useState(false);
 
-  // 多图状态：使用字符串数组
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -112,7 +110,6 @@ const Index = () => {
     scrollToBottom();
   }, [messages, waitingForAI, selectedImages]);
 
-  // 获取当前语言的字典
   const t = locales[language];
 
   const handleLanguageChange = (lang: string) => {
@@ -129,40 +126,23 @@ const Index = () => {
       });
       const data = await res.json();
       if (data.code === 200) setChatList(data.data);
-    } catch (e) {
-      console.error(t.loadListFailed, e);
-    }
+    } catch (e) { console.error(t.loadListFailed, e); }
   };
 
   useEffect(() => { fetchChatList(); }, [language]);
 
   const handleDeleteSession = async (chatId: string) => {
       try {
-          const res = await fetch('/api/chat', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'deleteSession', chatId })
-          });
-          if (res.ok) {
-              if (chatId === activeChatId) handleNewSession();
-              fetchChatList();
-          }
-      } catch (e) {
-          alert(t.deleteFail);
-      }
+          const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'deleteSession', chatId }) });
+          if (res.ok) { if (chatId === activeChatId) handleNewSession(); fetchChatList(); }
+      } catch (e) { alert(t.deleteFail); }
   };
 
   const handleRenameSession = async (chatId: string, newTitle: string) => {
       try {
-          const res = await fetch('/api/chat', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'renameSession', chatId, title: newTitle })
-          });
+          const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'renameSession', chatId, title: newTitle }) });
           if (res.ok) fetchChatList();
-      } catch (e) {
-          console.error(t.renameFail);
-      }
+      } catch (e) { console.error(t.renameFail); }
   };
 
   const loadChatSession = async (chatId: string) => {
@@ -180,10 +160,9 @@ const Index = () => {
           id: msg._id || `msg-${msg.timestamp}`,
           content: msg.content,
           reasoning: msg.reasoning,
-          // 兼容历史数据：有些可能是 image (单字符串)，有些是 imageUrls (数组)
-          imageUrls: msg.imageUrls
-            ? msg.imageUrls
-            : (msg.imageUrl ? [msg.imageUrl] : []),
+          // [新增] 加载历史评估
+          evaluation: msg.evaluation,
+          imageUrls: msg.imageUrls ? msg.imageUrls : (msg.imageUrl ? [msg.imageUrl] : []),
           role: msg.role,
           timestamp: msg.timestamp
         }));
@@ -194,11 +173,7 @@ const Index = () => {
         setSelectedImages([]);
         setStreamingMessageId(null);
       }
-    } catch (e) {
-      console.error(t.loadDetailFailed, e);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { console.error(t.loadDetailFailed, e); } finally { setLoading(false); }
   };
 
   const handleNewSession = () => {
@@ -210,64 +185,34 @@ const Index = () => {
     setStreamingMessageId(null);
     setIsSearchEnabled(false);
     setIsThinkingEnabled(false);
+    setIsTestModeEnabled(false);
     setActiveChatId(null);
   };
 
   const appendErrorMessage = (text: string) => {
-      setMessages(prev => [
-          ...prev,
-          {
-              id: `error-${Date.now()}`,
-              content: `⚠️ **${t.error}**: ${text}`,
-              role: 'assistant',
-              timestamp: Date.now(),
-          }
-      ]);
+      setMessages(prev => [ ...prev, { id: `error-${Date.now()}`, content: `⚠️ **${t.error}**: ${text}`, role: 'assistant', timestamp: Date.now() } ]);
   };
 
-  // 处理图片选择 (支持多图)
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-
-    // 限制：现有图片 + 新选图片不能超过 4 张
-    if (selectedImages.length + files.length > 4) {
-      alert(t.maxImageWarning);
-      return;
-    }
-
-    // 遍历读取文件
+    if (selectedImages.length + files.length > 4) { alert(t.maxImageWarning); return; }
     files.forEach(file => {
-      if (!['image/jpeg', 'image/png'].includes(file.type)) {
-        return; // 跳过非图片
-      }
-
+      if (!['image/jpeg', 'image/png'].includes(file.type)) return;
       const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        if (result) {
-          setSelectedImages(prev => [...prev, result]);
-        }
-      };
+      reader.onload = (e) => { const result = e.target?.result as string; if (result) setSelectedImages(prev => [...prev, result]); };
       reader.readAsDataURL(file);
     });
-
-    // 清空 input 允许重复选择相同文件
     if(fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // 移除指定位置的图片
-  const removeImage = (indexToRemove: number) => {
-    setSelectedImages(prev => prev.filter((_, index) => index !== indexToRemove));
-  };
+  const removeImage = (indexToRemove: number) => { setSelectedImages(prev => prev.filter((_, index) => index !== indexToRemove)); };
 
   const sendToLLM = async() => {
-    // 如果有图片数组，允许发送
     if(loading || (!inputText.trim() && selectedImages.length === 0)) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       content: inputText.trim(),
-      // 存储图片数组
       imageUrls: selectedImages.length > 0 ? [...selectedImages] : undefined,
       role: 'user',
       timestamp: Date.now()
@@ -280,6 +225,7 @@ const Index = () => {
     const imagesToSend = selectedImages;
     const useSearch = isSearchEnabled;
     const useThinking = isThinkingEnabled;
+    const useTestMode = isTestModeEnabled;
     const currentChatId = activeChatId;
     const currentLang = language;
 
@@ -298,6 +244,7 @@ const Index = () => {
           images: imagesToSend,
           useSearch: useSearch,
           enableThinking: useThinking,
+          enableTestMode: useTestMode,
           chatId: currentChatId,
           language: currentLang
         }),
@@ -321,6 +268,7 @@ const Index = () => {
 
       let fullContent = '';
       let fullReasoning = '';
+      let fullEvaluation = '';
       let tempStreamingId = '';
 
       while (true) {
@@ -340,16 +288,19 @@ const Index = () => {
 
               const contentChunk = delta?.content || '';
               const reasoningChunk = delta?.reasoning_content || '';
+              const evaluationChunk = delta?.evaluation_content || '';
 
-              if (contentChunk || reasoningChunk) {
+              if (contentChunk || reasoningChunk || evaluationChunk) {
                 fullContent += contentChunk;
                 fullReasoning += reasoningChunk;
+                fullEvaluation += evaluationChunk;
 
                 if (!tempStreamingId) {
                   const aiMessage: Message = {
                     id: `streaming-${Date.now()}`,
                     content: fullContent,
                     reasoning: fullReasoning,
+                    evaluation: fullEvaluation, // [新增]
                     role: 'assistant',
                     timestamp: Date.now()
                   };
@@ -360,22 +311,22 @@ const Index = () => {
                 } else {
                   setMessages(prev => prev.map(msg =>
                     msg.id === tempStreamingId
-                        ? { ...msg, content: fullContent, reasoning: fullReasoning }
+                        ? { ...msg, content: fullContent, reasoning: fullReasoning, evaluation: fullEvaluation } // [新增] 更新 evaluation
                         : msg
                   ));
                 }
               }
-            } catch (e) { /* 忽略解析错误 */ }
+            } catch (e) { /* 忽略 */ }
           }
         }
       }
 
-      if (!fullContent && !tempStreamingId) {
-        throw new Error(t.aiNoResponse);
-      }
+      if (!fullContent && !tempStreamingId) throw new Error(t.aiNoResponse);
 
       const finalChatId = newChatId || activeChatId;
       if (finalChatId && fullContent) {
+        // [TODO] 如果后端支持存 evaluation，也应该发过去。目前后端 saveAiMessage 只存 content。
+        // 这里只是 UI 上的展示。
         fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -415,7 +366,6 @@ const Index = () => {
               {messages.map((message) => (
                 <div key={message.id} className={`message ${message.role}-message`}>
                   <div className="message-content">
-                    {/* [修改] 渲染多张图片 */}
                     {message.role === 'user' && message.imageUrls && message.imageUrls.length > 0 && (
                       <div className="message-images-grid">
                         {message.imageUrls.map((imgUrl, index) => (
@@ -426,20 +376,35 @@ const Index = () => {
 
                     {message.role === 'assistant' ? (
                         <div>
+                          {/* 深度思考区块 */}
                           {message.reasoning && (
                             <div className="reasoning-block">
                                 <div className="reasoning-header">
-                                    <span className="reasoning-icon">💭</span>
-                                    {t.deepThink}...
+                                    <span className="reasoning-icon">💭</span>{t.deepThink}...
                                 </div>
                                 <div className="reasoning-content">
                                     <ReactMarkdown>{message.reasoning}</ReactMarkdown>
                                 </div>
                             </div>
                           )}
+
+                          {/* 正文回复 */}
                           <div className="main-response">
                             <ReactMarkdown>{message.content}</ReactMarkdown>
                           </div>
+
+                          {/* 评估区块 */}
+                          {message.evaluation && (
+                            <div className="evaluation-block">
+                                <div className="evaluation-header">
+                                    <span className="reasoning-icon">⚖️</span>
+                                    {t.evaluationTitle}
+                                </div>
+                                <div className="evaluation-content">
+                                    <ReactMarkdown>{message.evaluation}</ReactMarkdown>
+                                </div>
+                            </div>
+                          )}
                         </div>
                     ) : (
                       message.content.split('\n').map((line, index) => <p key={`${message.id}-${index}`}>{line}</p>)
@@ -453,7 +418,8 @@ const Index = () => {
                   <div className="message-content">
                     <div className="typing-animation"><span></span><span></span><span></span></div>
                     <div style={{fontSize: '12px', color: '#999', marginTop: '5px'}}>
-                        {isThinkingEnabled ? t.thinking : (isSearchEnabled ? t.searching : "")}
+                        {/* 状态提示优先级 */}
+                        {isThinkingEnabled ? t.thinking : (isTestModeEnabled ? t.evaluating : (isSearchEnabled ? t.searching : ""))}
                     </div>
                   </div>
                 </div>
@@ -465,22 +431,18 @@ const Index = () => {
           {!hasMessage && <p className='greet-text'>{t.greet}</p>}
 
           <div className='input-container'>
-            {/* 多图预览区域 - 遍历 selectedImages */}
             {selectedImages.length > 0 && (
               <div className="image-preview-container">
                 {selectedImages.map((img, index) => (
                   <div key={index} className="preview-wrapper">
                     <img src={img} alt={`Preview ${index}`} className="preview-image" />
-                    <button className="close-preview-btn" onClick={() => removeImage(index)}>
-                      <CloseIcon />
-                    </button>
+                    <button className="close-preview-btn" onClick={() => removeImage(index)}><CloseIcon /></button>
                   </div>
                 ))}
               </div>
             )}
 
             <textarea
-              // 根据图片数量动态调整样式
               className={`text-section ${selectedImages.length > 0 ? 'has-image' : ''}`}
               placeholder={t.placeholder}
               value={inputText}
@@ -490,43 +452,26 @@ const Index = () => {
             />
             <div className='button-items'>
               <div className="feature-buttons">
-                  <button
-                    type="button"
-                    className={`deepthink-button ${isThinkingEnabled ? 'active' : ''}`}
-                    onClick={() => setIsThinkingEnabled(!isThinkingEnabled)}
-                    disabled={loading}
-                    title={isThinkingEnabled ? "点击关闭深度思考" : "点击开启深度思考"}
-                  >
-                    {t.deepThink}
-                  </button>
+                  <button type="button" className={`deepthink-button ${isThinkingEnabled ? 'active' : ''}`} onClick={() => setIsThinkingEnabled(!isThinkingEnabled)} disabled={loading} title={isThinkingEnabled ? "点击关闭" : "点击开启"}>{t.deepThink}</button>
+                  <button type="button" className={`deepthink-button ${isSearchEnabled ? 'active' : ''}`} onClick={() => setIsSearchEnabled(!isSearchEnabled)} disabled={loading}>{t.webSearch}</button>
 
-                  <button
-                    type="button"
-                    className={`deepthink-button ${isSearchEnabled ? 'active' : ''}`}
-                    onClick={() => setIsSearchEnabled(!isSearchEnabled)}
-                    disabled={loading}
-                  >
-                    {t.webSearch}
-                  </button>
+                  {/* 图片按钮 */}
+                  <input type="file" accept=".jpg,.jpeg,.png" ref={fileInputRef} style={{display: 'none'}} onChange={handleImageSelect} multiple />
+                  <button type="button" className="deepthink-button image-upload-button" onClick={() => fileInputRef.current?.click()} disabled={loading} title={t.imageSelect}><ImageIcon /></button>
 
-                  {/* 图片按钮增加 multiple 属性 */}
-                  <input
-                    type="file"
-                    accept=".jpg,.jpeg,.png"
-                    ref={fileInputRef}
-                    style={{display: 'none'}}
-                    onChange={handleImageSelect}
-                    multiple
-                  />
-                  <button
-                    type="button"
-                    className="deepthink-button image-upload-button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={loading}
-                    title={t.imageSelect}
-                  >
-                    <ImageIcon />
-                  </button>
+                  {/* 测试模式按钮 (仅当代码常量开启时显示) */}
+                  {IS_TEST_MODE_AVAILABLE && (
+                      <button
+                        type="button"
+                        className={`deepthink-button image-upload-button ${isTestModeEnabled ? 'active' : ''}`}
+                        onClick={() => setIsTestModeEnabled(!isTestModeEnabled)}
+                        disabled={loading}
+                        title={t.testMode}
+                        style={{ marginLeft: '4px' }}
+                      >
+                        <FlaskIcon />
+                      </button>
+                  )}
               </div>
               <button type="button" className='send-button' onClick={sendToLLM} disabled={loading}></button>
             </div>
