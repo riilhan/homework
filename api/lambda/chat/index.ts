@@ -148,33 +148,54 @@ export const post = async ({ data }: { data: any }) => {
     // 2. CRUD Actions
     if (data.action === 'getHistory') { /*...*/ const list = await Conversation.find({ userId: 'user-1' }).sort({ updatedAt: -1 }).select('title updatedAt'); return { code: 200, data: list }; }
     if (data.action === 'getConversation') { /*...*/ const conv = await Conversation.findById(data.chatId); return { code: 200, data: conv }; }
-    if (data.action === 'saveAiMessage') { /*...*/ await Conversation.findByIdAndUpdate(data.chatId, { $push: { messages: { role: 'assistant', content: data.content, timestamp: Date.now() } } }); return { code: 200, msg: 'Saved' }; }
     if (data.action === 'deleteSession') { /*...*/ await Conversation.findByIdAndDelete(data.chatId); return { code: 200, msg: 'Deleted' }; }
     if (data.action === 'renameSession') { /*...*/ await Conversation.findByIdAndUpdate(data.chatId, { title: data.title }); return { code: 200, msg: 'Renamed' }; }
+    if (data.action === 'saveAiMessage') {
+        try {
+            await Conversation.findByIdAndUpdate(data.chatId, {
+                $push: {
+                    messages: {
+                        role: 'assistant',
+                        content: data.content,
+                        reasoning: data.reasoning || '',
+                        evaluation: data.evaluation || '',
+                        timestamp: Date.now()
+                    }
+                }
+            });
+            return { code: 200, msg: 'Saved' };
+        } catch (e) { return { code: 500, error: 'Save failed' }; }
+    }
 
     // 3. 核心聊天逻辑
     try {
-        // 接收 enableTestMode 参数
         const { message, useSearch, chatId, language = 'zh', enableThinking = false, images = [], enableTestMode = false } = data;
 
         let currentConversation;
         let finalSystemPrompt = language === 'en' ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT_ZH;
 
-        // DB 操作
-        const userContentToSave = (images.length > 0) ? `${message || ''} [发送了 ${images.length} 张图片]` : message;
+        // 数据库操作：保存用户消息 (包含图片)
+        const userMessagePayload = {
+            role: 'user',
+            content: message || (images.length > 0 ? '[图片]' : ''), // 确保 content 不为空
+            imageUrls: images,
+            timestamp: Date.now()
+        };
+
         if (chatId) {
             currentConversation = await Conversation.findById(chatId);
             if (currentConversation) {
-                currentConversation.messages.push({ role: 'user', content: userContentToSave, timestamp: Date.now() });
+                currentConversation.messages.push(userMessagePayload);
                 currentConversation.updatedAt = new Date();
                 await currentConversation.save();
             }
         }
+
         if (!currentConversation) {
             currentConversation = await Conversation.create({
                 userId: 'user-1',
                 title: generateTitle(message),
-                messages: [{ role: 'user', content: userContentToSave, timestamp: Date.now() }]
+                messages: [userMessagePayload]
             });
         }
 
