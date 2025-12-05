@@ -3,17 +3,19 @@ import mongoose, { Schema, model, models } from 'mongoose';
 const MessageSchema = new Schema({
   role: { type: String, required: true },
   content: { type: String, required: true },
+  reasoning: { type: String },
+  evaluation: { type: String },
+  imageUrls: { type: [String], default: [] },
   timestamp: { type: Number, default: Date.now }
 });
 
 const ConversationSchema = new Schema({
-  userId: { type: String, default: 'user-1' }, // 简易版，暂定单用户
+  userId: { type: String, default: 'user-1' },
   title: { type: String, default: '新对话' },
   messages: [MessageSchema],
   updatedAt: { type: Date, default: Date.now }
 });
 
-// 更新 updateAt 的中间件
 ConversationSchema.pre('save', function(next) {
   this.updatedAt = new Date();
   next();

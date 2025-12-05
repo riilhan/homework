@@ -325,12 +325,16 @@ const Index = () => {
 
       const finalChatId = newChatId || activeChatId;
       if (finalChatId && fullContent) {
-        // [TODO] 如果后端支持存 evaluation，也应该发过去。目前后端 saveAiMessage 只存 content。
-        // 这里只是 UI 上的展示。
         fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'saveAiMessage', chatId: finalChatId, content: fullContent })
+          body: JSON.stringify({
+              action: 'saveAiMessage',
+              chatId: finalChatId,
+              content: fullContent,
+              reasoning: fullReasoning,
+              evaluation: fullEvaluation
+          })
         }).catch(e => console.warn(t.saveMessageFailed, e));
       }
 
