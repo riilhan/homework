@@ -6,6 +6,7 @@
 <img width="2559" height="1338" alt="image" src="https://github.com/user-attachments/assets/a3a4b76f-8743-45c7-ad59-ffd8de61183b" />
 <img width="2559" height="1335" alt="image" src="https://github.com/user-attachments/assets/f19f2eeb-669a-4843-a8da-30eb1b3b71d0" />
 
+
 ## 🛠️ 技术栈与工具
 - 框架: 通过 Modern.js 完成前后端一体应用搭建 (React + Node.js BFF)。
 - 大模型:
@@ -36,8 +37,8 @@
 
 # 🧩 遇到的难点及解决方案
 1. 输入框样式遮挡
-	- 问题：当字数过多时，用户输入的内容会遮住输入框底部的操作按钮
-	- 解决方案：尝试调整 padding，未能成功解决
+	- 问题：原方案中按钮组采用绝对定位悬浮在输入框底部，当输入文字过多产生滚动时，底部的文字会被按钮遮挡，且单纯增加 padding-bottom 无法完美解决滚动到底部时的视线遮挡问题
+	- 解决方案：Flexbox 布局重构。将输入框容器改为 flex-direction: column 布局，文本区域设置为 flex: 1 自动占据剩余空间，按钮区域取消绝对定位改为底部静态块。实现了文本滚动区与按钮操作区的物理隔离，彻底解决遮挡
 2. 滚动条美化
 	- 问题：滚动条出现在 message-container 容器边缘，而非 window 边缘
 	- 解决方案：使用 CSS ::-webkit-scrollbar { display: none; } 隐藏滚动条
@@ -51,13 +52,13 @@
 	- 问题：完全没有后端基础，根本不会写后端
 	- 解决方案：该问 ai 就问 ai，先把项目做完再慢慢学
 6. 串行流式编排
-   - 问题: 在“测试模式”下，需要先流式输出 Qwen 的回答，待其结束后，再将完整内容发给 Doubao 进行评估，最后将 Doubao 的评估也流式输出给前端，保持连接不断开。
-   - 解决方案: 在 BFF 层手动控制 ReadableStream 的 controller。先 pipe Qwen 的流，同时在后端 buffer 完整回答；Qwen 结束后不关闭流，立即请求 Doubao，将其输出伪造成 SSE 格式继续 enqueue 到同一个流中。
+   - 问题: 在“测试模式”下，需要先流式输出 Qwen 的回答，待其结束后，再将完整内容发给 Doubao 进行评估，最后将 Doubao 的评估也流式输出给前端，保持连接不断开
+   - 解决方案: 在 BFF 层手动控制 ReadableStream 的 controller。先 pipe Qwen 的流，同时在后端 buffer 完整回答；Qwen 结束后不关闭流，立即请求 Doubao，将其输出伪造成 SSE 格式继续 enqueue 到同一个流中
 
 # 🐛 待修 bug
 - 创建新会话偶尔会创建了两个（目前只触发过一次）
-- loading 时禁止切换会话列表
-- 输入框遮挡
+- ✅loading 时禁止切换会话列表
+- ✅输入框遮挡
 
 # 📅 未来规划
 - 重命名会话样式优化，现在看不清字
