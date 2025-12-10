@@ -22,9 +22,8 @@ interface SidebarProps {
   onSelectChat: (chatId: string) => void;
   onDeleteSession: (chatId: string) => void;
   onRenameSession: (chatId: string, newTitle: string) => void;
-
-  // 接收当前语言
   currentLanguage: 'zh' | 'en';
+  isLoading: boolean;
 }
 
 // SVG 图标
@@ -64,7 +63,8 @@ const Sidebar = ({
     onSelectChat,
     onDeleteSession,
     onRenameSession,
-    currentLanguage = 'zh'
+    currentLanguage = 'zh',
+    isLoading
 }: SidebarProps) => {
     const [isClosed, setIsClosed] = useState(false);
     const [isDarkMode, setIsDarkMode] = useState(false);
@@ -138,13 +138,13 @@ const Sidebar = ({
         <div className="menu menu-actions">
           <ul className="menu-links">
             <li className="nav-link" onMouseEnter={() => setIsHovered('newSession')} onMouseLeave={() => setIsHovered(null)}>
-              <a href="#" onClick={(e) => { e.preventDefault(); onNewSession(); }}>
+              <a href="#" onClick={(e) => { e.preventDefault(); if (isLoading) return; onNewSession(); }}>
                 <img src={getIconSrc('newSession')} alt="" className="iconfont icon-new icon" />
                 <span className="text nac-text">{t.newChat}</span>
               </a>
             </li>
             <li className="nav-link" onMouseEnter={() => setIsHovered('shiftLanguage')} onMouseLeave={() => setIsHovered(null)}>
-              <a href="#" onClick={(e) => { e.preventDefault(); handleLanguageChange(); }}>
+              <a href="#" onClick={(e) => { e.preventDefault();  handleLanguageChange(); }}>
                 <img src={getIconSrc('shiftLanguage')} alt="" className="iconfont icon-langugage icon" />
                 <span className="text nac-text">{t.switchLang}</span>
               </a>
@@ -153,12 +153,12 @@ const Sidebar = ({
         </div>
 
         {/* 历史记录列表 */}
-        <div className="chat-history" style={{ flexGrow: 1, overflowY: 'auto', marginTop: '10px' }}>
+        <div className="chat-history" style={{ flexGrow: 1, overflowY: 'auto', marginTop: '10px', scrollbarWidth: 'none'}}>
             {!isClosed && chatList.length > 0 && <div className="history-header" style={{padding: '0 14px', fontSize: '12px', opacity: 0.6, marginBottom: '8px'}}>{t.history}</div>}
             <ul className="menu-links">
                 {chatList.map((chat) => (
                     <li key={chat._id} className={`nav-link chat-item ${activeChatId === chat._id ? 'active' : ''} ${editingId === chat._id ? 'editing' : ''}`}>
-                        <a href="#" onClick={(e) => { e.preventDefault(); onSelectChat(chat._id); }}>
+                        <a href="#" onClick={(e) => { e.preventDefault();  if (isLoading) return; onSelectChat(chat._id); }}>
                             <span className="icon">💬</span>
 
                             {editingId === chat._id && !isClosed ? (
@@ -184,10 +184,10 @@ const Sidebar = ({
                                         <button className="action-btn" onClick={submitRename} title="确认"><ConfirmIcon /></button>
                                     ) : (
                                         <>
-                                            <button className="action-btn" onClick={(e) => startEditing(e, chat)} title="重命名"><EditIcon /></button>
-                                            <button className="action-btn" onClick={(e) => {
+                                            <button className="action-btn" disabled={isLoading} onClick={(e) => {if(!isLoading) startEditing(e, chat)}} title="重命名"><EditIcon /></button>
+                                            <button className="action-btn" disabled={isLoading} onClick={(e) => {
                                                 e.stopPropagation();
-                                                if(window.confirm(t.confirmDelete)) onDeleteSession(chat._id);
+                                                if(!isLoading && window.confirm(t.confirmDelete)) onDeleteSession(chat._id);
                                             }} title="删除"><DeleteIcon /></button>
                                         </>
                                     )}

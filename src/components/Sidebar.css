@@ -452,3 +452,18 @@ header {
 .dark .rename-input {
     color: #e6e6e6;
 }
+
+.nav-link.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.nav-link.disabled a {
+    cursor: not-allowed;
+}
+
+.action-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}

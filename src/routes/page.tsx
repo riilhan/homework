@@ -360,6 +360,7 @@ const Index = () => {
           onDeleteSession={handleDeleteSession}
           onRenameSession={handleRenameSession}
           currentLanguage={language}
+          isLoading={loading}
         />
       </div>
 
