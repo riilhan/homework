@@ -435,7 +435,7 @@ const Index = () => {
 
           {!hasMessage && <p className='greet-text'>{t.greet}</p>}
 
-          <div className='input-container'>
+          <div className={`input-container ${loading ? 'disabled' : ''}`}>
             {selectedImages.length > 0 && (
               <div className="image-preview-container">
                 {selectedImages.map((img, index) => (
